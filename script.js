@@ -501,9 +501,23 @@ document.addEventListener("DOMContentLoaded", () => {
       }, 3000);
     }
 
+    // Check if mobile device (iOS or Android)
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    // For mobile fallback, open window synchronously during user click to avoid popup blocker
+    let fallbackWindow = null;
+    if (isMobile && (!navigator.share || !navigator.canShare)) {
+      // Open blank window synchronously (during user click event)
+      fallbackWindow = window.open('', '_blank');
+      if (fallbackWindow) {
+        fallbackWindow.document.write('<html><body style="margin:0;padding:0;background:#000;"><p style="color:white;padding:20px;">Loading image...</p></body></html>');
+      }
+    }
+    
     // Download as PNG
     canvas.toBlob((blob) => {
       if (!blob) {
+        if (fallbackWindow) fallbackWindow.close();
         showNotification("Error: Failed to create image. Please try again.", true);
         console.error("Failed to create blob from canvas");
         return;
@@ -511,9 +525,6 @@ document.addEventListener("DOMContentLoaded", () => {
       
       const suffix = includeBackground ? "" : "_transparent";
       const filename = `${text.replace(/\s+/g, "_")}${suffix}.png`;
-      
-      // Check if mobile device (iOS or Android)
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       
       if (isMobile) {
         // Try Web Share API with file - this shows native share menu with "Save to Photos"
@@ -527,28 +538,61 @@ document.addEventListener("DOMContentLoaded", () => {
               files: [file],
               title: filename
             }).catch((error) => {
-              // If share fails, fallback to opening image in new tab
-              // User can long-press the image to save (native iOS/Android behavior)
+              // If share fails, use the pre-opened fallback window
               if (error.name !== 'AbortError') {
-                console.log('Web Share API not supported, opening image in new tab');
-                const url = URL.createObjectURL(blob);
-                window.open(url, '_blank');
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                console.log('Web Share API failed, using fallback window');
+                if (fallbackWindow) {
+                  const url = URL.createObjectURL(blob);
+                  fallbackWindow.location.href = url;
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } else {
+                  // Fallback window was blocked, try direct open (may be blocked)
+                  const url = URL.createObjectURL(blob);
+                  const newWindow = window.open(url, '_blank');
+                  if (newWindow) {
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                  } else {
+                    showNotification("Please allow popups to download the image", true);
+                  }
+                }
+              } else if (fallbackWindow) {
+                // User aborted share, close fallback window
+                fallbackWindow.close();
               }
             });
           } else {
-            // File sharing not supported - open image in new tab
-            // User can long-press to save using native browser menu
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            // File sharing not supported - use pre-opened fallback window
+            if (fallbackWindow) {
+              const url = URL.createObjectURL(blob);
+              fallbackWindow.location.href = url;
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } else {
+              // Fallback window was blocked, try direct open (may be blocked)
+              const url = URL.createObjectURL(blob);
+              const newWindow = window.open(url, '_blank');
+              if (newWindow) {
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              } else {
+                showNotification("Please allow popups to download the image", true);
+              }
+            }
           }
         } else {
-          // Web Share API not available - open image in new tab
-          // User can long-press to save using native browser menu
-          const url = URL.createObjectURL(blob);
-          window.open(url, '_blank');
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          // Web Share API not available - use pre-opened fallback window
+          if (fallbackWindow) {
+            const url = URL.createObjectURL(blob);
+            fallbackWindow.location.href = url;
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } else {
+            // Fallback window was blocked, try direct open (may be blocked)
+            const url = URL.createObjectURL(blob);
+            const newWindow = window.open(url, '_blank');
+            if (newWindow) {
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } else {
+              showNotification("Please allow popups to download the image", true);
+            }
+          }
         }
       } else {
         // Desktop: traditional download
@@ -565,14 +609,6 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
           showNotification("Error downloading image. Please try again.", true);
           console.error("Download error:", error);
-        }
-      }
-      
-      // Helper function - not used on mobile (Web Share API handles everything)
-      function showImageForDownload(dataUrl, filename) {
-        // Desktop fallback: just open in new tab
-        if (!isMobile) {
-          window.open(dataUrl, '_blank');
         }
       }
     }, "image/png");
