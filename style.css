@@ -380,8 +380,8 @@ body {
   }
 
   .parallax-right {
-    top: 0;
     bottom: 0;
+    top: auto;
   }
 
   .title-image {
