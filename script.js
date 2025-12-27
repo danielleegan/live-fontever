@@ -411,15 +411,53 @@ document.addEventListener("DOMContentLoaded", () => {
         console.error("Failed to create blob from canvas");
         return;
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
+      
       const suffix = includeBackground ? "" : "_transparent";
-      a.download = `${text.replace(/\s+/g, "_")}${suffix}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `${text.replace(/\s+/g, "_")}${suffix}.png`;
+      
+      // Check if mobile device (iOS or Android)
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Try Web Share API first
+        const file = new File([blob], filename, { type: 'image/png' });
+        
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({
+            files: [file],
+            title: filename
+          }).then(() => {
+            // Share successful
+          }).catch((error) => {
+            // Share failed or cancelled, fallback to opening in new tab
+            console.log('Web Share API failed, falling back to new tab:', error);
+            openInNewTab(blob, filename);
+          });
+        } else {
+          // Web Share API not available, fallback to opening in new tab
+          openInNewTab(blob, filename);
+        }
+      } else {
+        // Desktop: traditional download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+      
+      // Helper function to open image in new tab for mobile fallback
+      function openInNewTab(blob, filename) {
+        const reader = new FileReader();
+        reader.onloadend = function() {
+          const dataUrl = reader.result;
+          window.open(dataUrl, '_blank');
+        };
+        reader.readAsDataURL(blob);
+      }
     }, "image/png");
   };
 
