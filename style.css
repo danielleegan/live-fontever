@@ -155,6 +155,9 @@ body {
   flex-wrap: wrap;
   gap: 0;
   row-gap: 20px;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
   align-items: flex-start;
   justify-content: flex-start;
   box-sizing: border-box;
@@ -190,6 +193,13 @@ body {
   padding: 0;
   border: 0;
   display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
   vertical-align: top;
   line-height: 0;
   width: auto;

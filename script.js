@@ -726,4 +726,53 @@ document.addEventListener("DOMContentLoaded", () => {
       observer.observe(element);
     });
   }, 200);
+
+  // Prevent image save on long-press and add download functionality to output area
+  let longPressTimer = null;
+  let isLongPress = false;
+  
+  // Prevent context menu (right-click/long-press) on images in output
+  output.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    // Trigger download on long-press/right-click
+    downloadImage(true);
+  });
+  
+  // Handle touch events for mobile long-press
+  output.addEventListener('touchstart', (e) => {
+    isLongPress = false;
+    longPressTimer = setTimeout(() => {
+      isLongPress = true;
+      e.preventDefault();
+      downloadImage(true);
+    }, 500); // 500ms for long-press
+  });
+  
+  output.addEventListener('touchend', (e) => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    if (isLongPress) {
+      e.preventDefault();
+    }
+  });
+  
+  output.addEventListener('touchmove', (e) => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  });
+  
+  // Prevent image dragging
+  output.addEventListener('dragstart', (e) => {
+    if (e.target.tagName === 'IMG') {
+      e.preventDefault();
+    }
+  });
+  
+  // Prevent image selection
+  output.style.userSelect = 'none';
+  output.style.webkitUserSelect = 'none';
 });
