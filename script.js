@@ -642,67 +642,38 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }, 200);
 
-  // Mobile: long-press for save option
+  // Prevent all downloads/interactions from output area
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  let longPressTimer = null;
-  let isLongPress = false;
   
-  // Desktop: prevent all downloads from output area
-  if (!isMobile) {
-    // Prevent context menu on images in output
-    output.addEventListener('contextmenu', (e) => {
+  // Prevent context menu on images in output
+  output.addEventListener('contextmenu', (e) => {
+    if (e.target.tagName === 'IMG' && e.target.closest('#output')) {
+      e.preventDefault();
+    }
+  }, true);
+  
+  // Prevent image dragging
+  output.addEventListener('dragstart', (e) => {
+    if (e.target.tagName === 'IMG') {
+      e.preventDefault();
+    }
+  });
+  
+  // Mobile: prevent all image interactions (click, touch, etc.)
+  if (isMobile) {
+    output.addEventListener('click', (e) => {
       if (e.target.tagName === 'IMG' && e.target.closest('#output')) {
         e.preventDefault();
+        e.stopPropagation();
       }
     }, true);
     
-    // Prevent image dragging
-    output.addEventListener('dragstart', (e) => {
-      if (e.target.tagName === 'IMG') {
-        e.preventDefault();
-      }
-    });
-  }
-  
-  if (isMobile) {
-    // Mobile: long-press to trigger native share menu
     output.addEventListener('touchstart', (e) => {
-      isLongPress = false;
-      longPressTimer = setTimeout(() => {
-        isLongPress = true;
+      if (e.target.tagName === 'IMG' && e.target.closest('#output')) {
         e.preventDefault();
-        // Trigger download to get the image, then share it
-        downloadImage(true);
-      }, 500); // 500ms for long-press
-    });
-    
-    output.addEventListener('touchend', (e) => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
+        e.stopPropagation();
       }
-      if (isLongPress) {
-        e.preventDefault();
-      }
-    });
-    
-    output.addEventListener('touchmove', (e) => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-    });
-    
-    // Prevent image dragging on mobile
-    output.addEventListener('dragstart', (e) => {
-      if (e.target.tagName === 'IMG') {
-        e.preventDefault();
-      }
-    });
-    
-    // Prevent image selection on mobile
-    output.style.userSelect = 'none';
-    output.style.webkitUserSelect = 'none';
+    }, true);
   }
   // Desktop: Allow default right-click menu (including "Save image as")
   
