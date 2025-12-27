@@ -36,12 +36,14 @@ document.addEventListener("DOMContentLoaded", () => {
     
     if (parallaxLeft) {
       // Left image moves down as you scroll
-      parallaxLeft.style.transform = `translateY(${moveDistance}px)`;
+      // Use translate3d for better hardware acceleration on mobile
+      parallaxLeft.style.transform = `translate3d(0, ${moveDistance}px, 0)`;
     }
     
     if (parallaxRight) {
       // Right image moves up as you scroll (opposite direction, same distance)
-      parallaxRight.style.transform = `translateY(${-moveDistance}px)`;
+      // Use translate3d for better hardware acceleration on mobile
+      parallaxRight.style.transform = `translate3d(0, ${-moveDistance}px, 0)`;
     }
   }
   
