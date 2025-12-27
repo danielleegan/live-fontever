@@ -1,6 +1,65 @@
 document.addEventListener("DOMContentLoaded", () => {
   const input = document.getElementById("textInput");
   const output = document.getElementById("output");
+  
+  // Set default text based on PostHog experiment
+  // 
+  // To set up the experiment in PostHog:
+  // 1. Go to PostHog > Feature Flags
+  // 2. Create a new feature flag with key: 'default-text-experiment'
+  // 3. Set up four variations:
+  //    - Control (or no flag): 'my name is bryan johnson'
+  //    - version-1: 'would you spare a little blood for bryan?'
+  //    - version-2: 'hey man hows it going?'
+  //    - version-3: 'i am so scared of death'
+  // 4. Set the rollout percentage (e.g., 25% each)
+  // 5. The code will automatically track which variation each user sees
+  //
+  function setDefaultTextFromExperiment() {
+    if (typeof posthog !== 'undefined' && posthog.getFeatureFlag) {
+      // Check the feature flag for default text experiment
+      // Feature flag key: 'default-text-experiment'
+      const variation = posthog.getFeatureFlag('default-text-experiment');
+      
+      let defaultText = '';
+      let variationName = 'control';
+      
+      if (variation === 'version-1') {
+        defaultText = 'would you spare a little blood for bryan?';
+        variationName = 'version-1';
+      } else if (variation === 'version-2') {
+        defaultText = 'hey man hows it going?';
+        variationName = 'version-2';
+      } else if (variation === 'version-3') {
+        defaultText = 'i am so scared of death';
+        variationName = 'version-3';
+      } else {
+        // Control or no flag
+        defaultText = 'my name is bryan johnson';
+        variationName = 'control';
+      }
+      
+      // Set the input value
+      input.value = defaultText;
+      
+      // Track which variation was shown
+      if (typeof posthog !== 'undefined' && posthog.capture) {
+        posthog.capture('experiment_viewed', {
+          experiment_name: 'default-text-experiment',
+          variation: variationName,
+          default_text: defaultText
+        });
+      }
+      
+      // Update output to show the default text (will be called after updateOutput is defined)
+      if (typeof updateOutput === 'function') {
+        updateOutput();
+      }
+    } else {
+      // Fallback if PostHog not loaded yet - wait a bit and try again
+      setTimeout(setDefaultTextFromExperiment, 500);
+    }
+  }
   const downloadBtn = document.getElementById("download");
   const downloadTransparentBtn = document.getElementById("downloadTransparent");
 
@@ -210,7 +269,28 @@ document.addEventListener("DOMContentLoaded", () => {
     updateOutput();
   });
   
-  // Trigger initial output with default value
+  // Set default text from PostHog experiment after everything is initialized
+  // Wait for PostHog to be ready, then set default text
+  if (typeof posthog !== 'undefined') {
+    // PostHog already loaded
+    posthog.onFeatureFlags(function() {
+      setDefaultTextFromExperiment();
+    });
+  } else {
+    // Wait for PostHog to load
+    setTimeout(function() {
+      if (typeof posthog !== 'undefined' && posthog.onFeatureFlags) {
+        posthog.onFeatureFlags(function() {
+          setDefaultTextFromExperiment();
+        });
+      } else {
+        // Fallback: try setting default text after a delay
+        setTimeout(setDefaultTextFromExperiment, 1000);
+      }
+    }, 500);
+  }
+  
+  // Also call updateOutput to show initial state (will be overridden by experiment if PostHog loads)
   updateOutput();
 
 
