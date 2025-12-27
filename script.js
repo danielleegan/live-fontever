@@ -674,17 +674,25 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Scroll reveal animation for individual elements (works both ways)
+  // Use a larger threshold and rootMargin to prevent glitchy behavior at edges
   const observerOptions = {
-    threshold: 0.1,
-    rootMargin: '0px 0px -50px 0px'
+    threshold: [0, 0.15], // Trigger at 0% and 15% visibility for smoother transitions
+    rootMargin: '50px 0px 50px 0px' // Add margin to create buffer zone and prevent edge flickering
   };
 
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      if (entry.isIntersecting) {
+      // Use a higher threshold check to prevent rapid toggling at edges
+      const isVisible = entry.intersectionRatio >= 0.15 || entry.isIntersecting;
+      
+      if (isVisible) {
         entry.target.classList.add('visible');
       } else {
-        entry.target.classList.remove('visible');
+        // Only remove visible if element is significantly out of view
+        // This prevents flickering when element is right at the edge
+        if (entry.intersectionRatio === 0) {
+          entry.target.classList.remove('visible');
+        }
       }
     });
   }, observerOptions);
