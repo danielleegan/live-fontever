@@ -528,35 +528,58 @@ document.addEventListener("DOMContentLoaded", () => {
         const blob = dataURLToBlob(dataURL);
         const file = new File([blob], filename, { type: 'image/png' });
         
+        // Check if file sharing is actually supported (some extensions block this)
+        let canShareFile = false;
+        try {
+          canShareFile = navigator.canShare && navigator.canShare({ files: [file] });
+        } catch (e) {
+          // canShare might throw if extensions are interfering
+          console.log('canShare check failed, trying share anyway:', e);
+          canShareFile = true; // Try anyway
+        }
+        
         // Call share() immediately while user gesture is still valid
-        navigator.share({
-          files: [file],
-          title: filename
-        }).catch((error) => {
-          // If share fails, fallback to toBlob for better quality and try download
-          if (error.name === 'AbortError') {
-            // User cancelled - do nothing
-            return;
-          }
-          
-          console.log('Web Share API failed, falling back to download:', error.name);
-          // Fallback: use toBlob for better quality, then download
-          canvas.toBlob((blob) => {
-            if (!blob) {
-              showNotification("Error: Failed to create image. Please try again.", true);
+        if (canShareFile || !navigator.canShare) {
+          navigator.share({
+            files: [file],
+            title: filename
+          }).catch((error) => {
+            // If share fails, fallback to data URL approach
+            if (error.name === 'AbortError') {
+              // User cancelled - do nothing
               return;
             }
-            const url = URL.createObjectURL(blob);
+            
+            console.log('Web Share API failed, falling back to download:', error.name, error.message);
+            // Fallback: use data URL and open in new tab (Chrome mobile can save data URLs via long-press)
+            // Chrome mobile has issues with blob URLs and download attribute - data URLs work better
+            // Note: If this fails, it might be due to browser extensions blocking popups
+            const newWindow = window.open(dataURL, '_blank');
+            if (!newWindow) {
+              // Popup blocked (likely by extension) - try download link as last resort
+              const a = document.createElement("a");
+              a.href = dataURL;
+              a.download = filename;
+              a.style.display = "none";
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            }
+          });
+        } else {
+          // File sharing not supported - use data URL fallback immediately
+          console.log('File sharing not supported, using data URL fallback');
+          const newWindow = window.open(dataURL, '_blank');
+          if (!newWindow) {
             const a = document.createElement("a");
-            a.href = url;
+            a.href = dataURL;
             a.download = filename;
             a.style.display = "none";
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-          }, "image/png");
-        });
+          }
+        }
         return; // Exit early if mobile share was attempted
       } catch (error) {
         console.log('Error with toDataURL, falling back to toBlob:', error);
@@ -574,15 +597,21 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (isMobile) {
         // Mobile fallback (if toDataURL approach failed above)
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.style.display = "none";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        // Use data URL and open in new tab (Chrome mobile can save data URLs via long-press)
+        // Chrome mobile has issues with blob URLs - data URLs work better
+        const dataURL = canvas.toDataURL('image/png');
+        // Open data URL in new tab - user can long-press image to save
+        const newWindow = window.open(dataURL, '_blank');
+        if (!newWindow) {
+          // Popup blocked - try download link as last resort
+          const a = document.createElement("a");
+          a.href = dataURL;
+          a.download = filename;
+          a.style.display = "none";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
       } else {
         // Desktop: traditional download
         try {
