@@ -73,13 +73,15 @@ document.addEventListener("DOMContentLoaded", () => {
       return "!.png";
     } else if (char === ".") {
       return "period.png";
+    } else if (char === "?") {
+      return "question.png";
     }
     return null; // Invalid character
   }
 
   // Helper function to check if character is valid
   function isValidChar(char) {
-    return (char >= "A" && char <= "Z") || char === "!" || char === ".";
+    return (char >= "A" && char <= "Z") || char === "!" || char === "." || char === "?";
   }
 
   // Function to update output
@@ -127,7 +129,9 @@ document.addEventListener("DOMContentLoaded", () => {
               if (filename) {
                 const img = document.createElement("img");
                 img.crossOrigin = "anonymous";
-                img.src = `letters/${filename}?v=${imageVersion}`;
+                // URL encode the filename to handle special characters like "?" in the filename
+                const encodedFilename = encodeURIComponent(filename);
+                img.src = `letters/${encodedFilename}?v=${imageVersion}`;
                 img.dataset.char = char;
                 img.className = "letter";
                 wordContainer.appendChild(img);
