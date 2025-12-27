@@ -360,23 +360,21 @@ document.addEventListener("DOMContentLoaded", () => {
     const contentHeight = totalHeight + (lineData.length - 1) * lineSpacing;
     const contentWidth = maxLineWidth;
 
-    // Calculate watermark dimensions only if background is included
+    // Calculate watermark dimensions (always included)
     let watermarkHeight = 0;
     let fontSize = 14 * qualityScale; // Scale font size for quality
-    if (includeBackground) {
-      const watermarkText = "these bryans were brought to you by livefontever.com";
-      const tempCanvas = document.createElement("canvas");
-      const tempCtx = tempCanvas.getContext("2d");
-      tempCtx.font = `${fontSize}px sans-serif`;
-      const tempTextMetrics = tempCtx.measureText(watermarkText);
-      const targetWidth = contentWidth; // Full content width
-      if (tempTextMetrics.width > 0) {
-        fontSize = Math.floor((fontSize * targetWidth) / tempTextMetrics.width);
-        tempCtx.font = `${fontSize}px sans-serif`;
-      }
-      const watermarkTextHeight = fontSize; // Approximate text height
-      watermarkHeight = watermarkPadding + watermarkTextHeight; // Spacing above + text height
+    const watermarkText = "these bryans were brought to you by livefontever.com";
+    const tempCanvas = document.createElement("canvas");
+    const tempCtx = tempCanvas.getContext("2d");
+    tempCtx.font = `${fontSize}px "Work Sans", sans-serif`;
+    const tempTextMetrics = tempCtx.measureText(watermarkText);
+    const targetWidth = contentWidth; // Full content width
+    if (tempTextMetrics.width > 0) {
+      fontSize = Math.floor((fontSize * targetWidth) / tempTextMetrics.width);
+      tempCtx.font = `${fontSize}px "Work Sans", sans-serif`;
     }
+    const watermarkTextHeight = fontSize; // Approximate text height
+    watermarkHeight = watermarkPadding + watermarkTextHeight; // Spacing above + text height
     
     // Calculate total content height including watermark (if any)
     const totalContentHeight = contentHeight + watermarkHeight;
@@ -429,18 +427,15 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // Draw watermark at the bottom only if background is included
-    if (includeBackground) {
-      const watermarkText = "these bryans were brought to you by livefontever.com";
-      ctx.font = `${fontSize}px sans-serif`;
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      
-      // Draw text left-aligned (offset by padding for uniform spacing)
-      ctx.fillStyle = "#FFFFFF"; // White text
-      const watermarkY = imagePadding + contentHeight + watermarkPadding;
-      ctx.fillText(watermarkText, imagePadding, watermarkY);
-    }
+    // Draw watermark at the bottom (always included)
+    ctx.font = `${fontSize}px "Work Sans", sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    
+    // Draw text left-aligned (offset by padding for uniform spacing)
+    ctx.fillStyle = "#FFFFFF"; // White text
+    const watermarkY = imagePadding + contentHeight + watermarkPadding;
+    ctx.fillText(watermarkText, imagePadding, watermarkY);
 
     // Helper function to show toast notifications (mobile only)
     function showNotification(message, isError = false) {
