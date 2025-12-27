@@ -512,56 +512,40 @@ document.addEventListener("DOMContentLoaded", () => {
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       
       if (isMobile) {
-        // Convert blob to data URL for mobile
-        const reader = new FileReader();
-        reader.onloadend = function() {
-          const dataUrl = reader.result;
+        // Try Web Share API with file - this shows native share menu with "Save to Photos"
+        // Note: This only works on iOS Safari 14.5+ and Android Chrome
+        if (navigator.share && navigator.canShare) {
+          const file = new File([blob], filename, { type: 'image/png' });
           
-          // Try Web Share API first
-          if (navigator.share) {
-            // Convert data URL back to blob for sharing
-            fetch(dataUrl)
-              .then(res => res.blob())
-              .then(blob => {
-                const file = new File([blob], filename, { type: 'image/png' });
-                
-                // Check if we can share files
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                  navigator.share({
-                    files: [file],
-                    title: filename
-                  }).then(() => {
-                    showNotification("Image saved successfully!");
-                  }).catch((error) => {
-                    // User cancelled or share failed - don't show error for cancellation
-                    if (error.name !== 'AbortError') {
-                      console.log('Web Share API failed:', error);
-                      showNotification("Error sharing image. Please try again.", true);
-                    }
-                  });
-                } else {
-                  // Can't share files directly, create a blob URL and open it
-                  // User can then use native long-press to save
-                  const url = URL.createObjectURL(blob);
-                  window.open(url, '_blank');
-                  setTimeout(() => URL.revokeObjectURL(url), 1000);
-                }
-              })
-              .catch((error) => {
-                console.log('Error converting to blob for share:', error);
-                showNotification("Error preparing image. Please try again.", true);
-              });
+          // Check if file sharing is supported
+          if (navigator.canShare({ files: [file] })) {
+            navigator.share({
+              files: [file],
+              title: filename
+            }).catch((error) => {
+              // If share fails, fallback to opening image in new tab
+              // User can long-press the image to save (native iOS/Android behavior)
+              if (error.name !== 'AbortError') {
+                console.log('Web Share API not supported, opening image in new tab');
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank');
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              }
+            });
           } else {
-            // Web Share API not available - open image in new tab for native save
+            // File sharing not supported - open image in new tab
+            // User can long-press to save using native browser menu
             const url = URL.createObjectURL(blob);
             window.open(url, '_blank');
             setTimeout(() => URL.revokeObjectURL(url), 1000);
           }
-        };
-        reader.onerror = function() {
-          showNotification("Error reading image data. Please try again.", true);
-        };
-        reader.readAsDataURL(blob);
+        } else {
+          // Web Share API not available - open image in new tab
+          // User can long-press to save using native browser menu
+          const url = URL.createObjectURL(blob);
+          window.open(url, '_blank');
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
       } else {
         // Desktop: traditional download
         try {
