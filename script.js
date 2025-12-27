@@ -15,6 +15,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // 4. Set the rollout percentage (e.g., 25% each)
   // 5. The code will automatically track which variation each user sees
   //
+  let experimentTextSet = false;
+  let experimentTimeout = null;
+  
   function setDefaultTextFromExperiment() {
     if (typeof posthog !== 'undefined' && posthog.getFeatureFlag) {
       // Check the feature flag for default text experiment
@@ -41,6 +44,13 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Set the input value
       input.value = defaultText;
+      experimentTextSet = true;
+      
+      // Clear timeout since we got the value
+      if (experimentTimeout) {
+        clearTimeout(experimentTimeout);
+        experimentTimeout = null;
+      }
       
       // Track which variation was shown
       if (typeof posthog !== 'undefined' && posthog.capture) {
@@ -55,9 +65,23 @@ document.addEventListener("DOMContentLoaded", () => {
       if (typeof updateOutput === 'function') {
         updateOutput();
       }
+      return true; // Successfully set text
     } else {
       // Fallback if PostHog not loaded yet - wait a bit and try again
-      setTimeout(setDefaultTextFromExperiment, 500);
+      // But set a timeout to use control text if PostHog never loads
+      if (!experimentTimeout) {
+        experimentTimeout = setTimeout(() => {
+          if (!experimentTextSet && !input.value.trim()) {
+            // PostHog didn't load in time, use control text as fallback
+            input.value = 'my name is bryan johnson';
+            if (typeof updateOutput === 'function') {
+              updateOutput();
+            }
+          }
+        }, 1500); // Wait 1.5 seconds for PostHog to load
+      }
+      setTimeout(setDefaultTextFromExperiment, 300);
+      return false; // Not set yet
     }
   }
   const downloadBtn = document.getElementById("download");
@@ -270,28 +294,35 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   
   // Set default text from PostHog experiment after everything is initialized
-  // Wait for PostHog to be ready, then set default text
-  if (typeof posthog !== 'undefined') {
-    // PostHog already loaded
-    posthog.onFeatureFlags(function() {
-      setDefaultTextFromExperiment();
-    });
-  } else {
-    // Wait for PostHog to load
-    setTimeout(function() {
-      if (typeof posthog !== 'undefined' && posthog.onFeatureFlags) {
-        posthog.onFeatureFlags(function() {
-          setDefaultTextFromExperiment();
-        });
-      } else {
-        // Fallback: try setting default text after a delay
-        setTimeout(setDefaultTextFromExperiment, 1000);
-      }
-    }, 500);
+  // Try immediately first (PostHog might already be loaded)
+  let textSet = setDefaultTextFromExperiment();
+  
+  if (!textSet) {
+    // PostHog not ready yet, wait for it
+    if (typeof posthog !== 'undefined') {
+      // PostHog already loaded but flags not ready
+      posthog.onFeatureFlags(function() {
+        setDefaultTextFromExperiment();
+      });
+    } else {
+      // Wait for PostHog to load
+      setTimeout(function() {
+        if (typeof posthog !== 'undefined' && posthog.onFeatureFlags) {
+          posthog.onFeatureFlags(function() {
+            setDefaultTextFromExperiment();
+          });
+        } else {
+          // Fallback: try setting default text after a delay
+          setTimeout(setDefaultTextFromExperiment, 800);
+        }
+      }, 200);
+    }
   }
   
-  // Also call updateOutput to show initial state (will be overridden by experiment if PostHog loads)
-  updateOutput();
+  // Only call updateOutput if text was set, otherwise wait for experiment or timeout
+  if (input.value.trim()) {
+    updateOutput();
+  }
 
 
   // Function to handle download with optional background
