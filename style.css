@@ -385,6 +385,7 @@ body {
 /* Responsive design */
 @media (max-width: 768px) {
   .main-content {
+    max-width: 100%;
     padding: 20px 20px 500px;
   }
 
@@ -516,7 +517,8 @@ body {
 
 @media (max-width: 480px) {
   .main-content {
-    padding: 15px 15px 40px;
+    max-width: 100%;
+    padding: 15px 15px 500px;
   }
 
   .parallax-left,
