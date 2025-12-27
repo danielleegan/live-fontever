@@ -404,10 +404,62 @@ document.addEventListener("DOMContentLoaded", () => {
       ctx.fillText(watermarkText, imagePadding, watermarkY);
     }
 
+    // Helper function to show toast notifications
+    function showNotification(message, isError = false) {
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: ${isError ? '#ff4444' : '#4CAF50'};
+        color: white;
+        padding: 15px 25px;
+        border-radius: 8px;
+        z-index: 10001;
+        font-size: 16px;
+        font-weight: 500;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        animation: slideDown 0.3s ease-out;
+      `;
+      notification.textContent = message;
+      
+      // Add animation
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+      `;
+      if (!document.getElementById('notification-style')) {
+        style.id = 'notification-style';
+        document.head.appendChild(style);
+      }
+      
+      document.body.appendChild(notification);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        notification.style.animation = 'slideDown 0.3s ease-out reverse';
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+          }
+        }, 300);
+      }, 3000);
+    }
+
     // Download as PNG
     canvas.toBlob((blob) => {
       if (!blob) {
-        alert("Error creating image. Please check the browser console for details.");
+        showNotification("Error: Failed to create image. Please try again.", true);
         console.error("Failed to create blob from canvas");
         return;
       }
@@ -437,10 +489,16 @@ document.addEventListener("DOMContentLoaded", () => {
                   navigator.share({
                     files: [file],
                     title: filename
+                  }).then(() => {
+                    showNotification("Image saved successfully!");
                   }).catch((error) => {
                     // Share failed or cancelled, fallback to image display
-                    console.log('Web Share API failed, falling back to image display:', error);
-                    showImageForDownload(dataUrl, filename);
+                    if (error.name !== 'AbortError') {
+                      console.log('Web Share API failed, falling back to image display:', error);
+                      showNotification("Opening image for download...", false);
+                      showImageForDownload(dataUrl, filename);
+                    }
+                    // AbortError means user cancelled, don't show error
                   });
                 } else {
                   // Can't share files, try sharing URL instead
@@ -448,33 +506,49 @@ document.addEventListener("DOMContentLoaded", () => {
                     title: filename,
                     text: 'Download this image',
                     url: dataUrl
+                  }).then(() => {
+                    showNotification("Image shared successfully!");
                   }).catch((error) => {
                     // Share failed, fallback to image display
-                    console.log('Web Share API failed, falling back to image display:', error);
-                    showImageForDownload(dataUrl, filename);
+                    if (error.name !== 'AbortError') {
+                      console.log('Web Share API failed, falling back to image display:', error);
+                      showNotification("Opening image for download...", false);
+                      showImageForDownload(dataUrl, filename);
+                    }
                   });
                 }
               })
               .catch((error) => {
                 console.log('Error converting to blob for share:', error);
+                showNotification("Error preparing image. Showing download option...", true);
                 showImageForDownload(dataUrl, filename);
               });
           } else {
             // Web Share API not available, show image for download
+            showNotification("Opening image for download...", false);
             showImageForDownload(dataUrl, filename);
           }
+        };
+        reader.onerror = function() {
+          showNotification("Error reading image data. Please try again.", true);
         };
         reader.readAsDataURL(blob);
       } else {
         // Desktop: traditional download
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        try {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          showNotification("Image downloaded successfully!");
+        } catch (error) {
+          showNotification("Error downloading image. Please try again.", true);
+          console.error("Download error:", error);
+        }
       }
       
       // Helper function to display image for mobile users to long-press and save
@@ -520,9 +594,15 @@ document.addEventListener("DOMContentLoaded", () => {
           padding: 10px 20px;
           font-size: 16px;
           cursor: pointer;
+          background: #4CAF50;
+          color: white;
+          border: none;
+          border-radius: 5px;
         `;
         closeBtn.onclick = () => {
           document.body.removeChild(overlay);
+          // Show success message when closing overlay (user likely saved the image)
+          showNotification("Image ready! If you saved it, it's in your photos.");
         };
         
         overlay.appendChild(img);
