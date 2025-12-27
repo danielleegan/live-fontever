@@ -404,21 +404,28 @@ document.addEventListener("DOMContentLoaded", () => {
       ctx.fillText(watermarkText, imagePadding, watermarkY);
     }
 
-    // Helper function to show toast notifications
+    // Helper function to show toast notifications (mobile only)
     function showNotification(message, isError = false) {
+      // Only show notifications on mobile devices
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (!isMobile) {
+        return;
+      }
+      
       const notification = document.createElement('div');
       notification.style.cssText = `
         position: fixed;
-        top: 20px;
+        top: 50%;
         left: 50%;
-        transform: translateX(-50%);
-        background: ${isError ? '#ff4444' : '#4CAF50'};
+        transform: translate(-50%, -50%);
+        background: #73B2FF;
         color: white;
         padding: 15px 25px;
         border-radius: 8px;
         z-index: 10001;
         font-size: 16px;
         font-weight: 500;
+        text-align: center;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         animation: slideDown 0.3s ease-out;
       `;
@@ -430,11 +437,11 @@ document.addEventListener("DOMContentLoaded", () => {
         @keyframes slideDown {
           from {
             opacity: 0;
-            transform: translateX(-50%) translateY(-20px);
+            transform: translate(-50%, -60%);
           }
           to {
             opacity: 1;
-            transform: translateX(-50%) translateY(0);
+            transform: translate(-50%, -50%);
           }
         }
       `;
@@ -544,7 +551,7 @@ document.addEventListener("DOMContentLoaded", () => {
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-          showNotification("Image downloaded successfully!");
+          // Desktop downloads don't show notifications (mobile only)
         } catch (error) {
           showNotification("Error downloading image. Please try again.", true);
           console.error("Download error:", error);
@@ -626,7 +633,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const shareButton = document.getElementById("shareButton");
   if (shareButton) {
     shareButton.addEventListener("click", () => {
-      const message = "hey man, i thought you specifically would enjoy looking at this little naked man as a font livefontever.com";
+      const message = "hey man, i thought you specifically would enjoy looking at this little naked man as a font www.livefontever.com";
       const smsLink = `sms:?body=${encodeURIComponent(message)}`;
       window.location.href = smsLink;
     });
