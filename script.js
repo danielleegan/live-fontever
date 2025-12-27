@@ -110,6 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
               const filename = getImageFilename(char);
               if (filename) {
                 const img = document.createElement("img");
+                img.crossOrigin = "anonymous";
                 img.src = `letters/${filename}?v=${imageVersion}`;
                 img.dataset.char = char;
                 img.className = "letter";
