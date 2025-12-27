@@ -419,24 +419,52 @@ document.addEventListener("DOMContentLoaded", () => {
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       
       if (isMobile) {
-        // Try Web Share API first
-        const file = new File([blob], filename, { type: 'image/png' });
-        
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          navigator.share({
-            files: [file],
-            title: filename
-          }).then(() => {
-            // Share successful
-          }).catch((error) => {
-            // Share failed or cancelled, fallback to opening in new tab
-            console.log('Web Share API failed, falling back to new tab:', error);
-            openInNewTab(blob, filename);
-          });
-        } else {
-          // Web Share API not available, fallback to opening in new tab
-          openInNewTab(blob, filename);
-        }
+        // Convert blob to data URL for mobile
+        const reader = new FileReader();
+        reader.onloadend = function() {
+          const dataUrl = reader.result;
+          
+          // Try Web Share API first
+          if (navigator.share) {
+            // Convert data URL back to blob for sharing
+            fetch(dataUrl)
+              .then(res => res.blob())
+              .then(blob => {
+                const file = new File([blob], filename, { type: 'image/png' });
+                
+                // Check if we can share files
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                  navigator.share({
+                    files: [file],
+                    title: filename
+                  }).catch((error) => {
+                    // Share failed or cancelled, fallback to image display
+                    console.log('Web Share API failed, falling back to image display:', error);
+                    showImageForDownload(dataUrl, filename);
+                  });
+                } else {
+                  // Can't share files, try sharing URL instead
+                  navigator.share({
+                    title: filename,
+                    text: 'Download this image',
+                    url: dataUrl
+                  }).catch((error) => {
+                    // Share failed, fallback to image display
+                    console.log('Web Share API failed, falling back to image display:', error);
+                    showImageForDownload(dataUrl, filename);
+                  });
+                }
+              })
+              .catch((error) => {
+                console.log('Error converting to blob for share:', error);
+                showImageForDownload(dataUrl, filename);
+              });
+          } else {
+            // Web Share API not available, show image for download
+            showImageForDownload(dataUrl, filename);
+          }
+        };
+        reader.readAsDataURL(blob);
       } else {
         // Desktop: traditional download
         const url = URL.createObjectURL(blob);
@@ -449,14 +477,64 @@ document.addEventListener("DOMContentLoaded", () => {
         URL.revokeObjectURL(url);
       }
       
-      // Helper function to open image in new tab for mobile fallback
-      function openInNewTab(blob, filename) {
-        const reader = new FileReader();
-        reader.onloadend = function() {
-          const dataUrl = reader.result;
-          window.open(dataUrl, '_blank');
+      // Helper function to display image for mobile users to long-press and save
+      function showImageForDownload(dataUrl, filename) {
+        // Create a fullscreen overlay with the image
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.9);
+          z-index: 10000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-direction: column;
+          padding: 20px;
+        `;
+        
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.style.cssText = `
+          max-width: 100%;
+          max-height: 80vh;
+          object-fit: contain;
+        `;
+        
+        const instruction = document.createElement('p');
+        instruction.textContent = 'Long-press the image to save to your photos';
+        instruction.style.cssText = `
+          color: white;
+          margin-top: 20px;
+          font-size: 18px;
+          text-align: center;
+        `;
+        
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Close';
+        closeBtn.style.cssText = `
+          margin-top: 20px;
+          padding: 10px 20px;
+          font-size: 16px;
+          cursor: pointer;
+        `;
+        closeBtn.onclick = () => {
+          document.body.removeChild(overlay);
         };
-        reader.readAsDataURL(blob);
+        
+        overlay.appendChild(img);
+        overlay.appendChild(instruction);
+        overlay.appendChild(closeBtn);
+        overlay.onclick = (e) => {
+          if (e.target === overlay) {
+            document.body.removeChild(overlay);
+          }
+        };
+        
+        document.body.appendChild(overlay);
       }
     }, "image/png");
   };
