@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 1. Go to PostHog > Feature Flags
   // 2. Create a new feature flag with key: 'default-text-experiment'
   // 3. Set up four variations:
-  //    - Control (or no flag): 'my name is bryan johnson'
+  //    - Control (or no flag): 'hello my name is bryan johnson'
   //    - version-1: 'would you spare a little blood for bryan?'
   //    - version-2: 'hey man hows it going?'
   //    - version-3: 'i am so scared of death'
@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
         variationName = 'version-3';
       } else {
         // Control or no flag
-        defaultText = 'my name is bryan johnson';
+        defaultText = 'hello my name is bryan johnson';
         variationName = 'control';
       }
       
@@ -73,7 +73,7 @@ document.addEventListener("DOMContentLoaded", () => {
         experimentTimeout = setTimeout(() => {
           if (!experimentTextSet && !input.value.trim()) {
             // PostHog didn't load in time, use control text as fallback
-            input.value = 'my name is bryan johnson';
+            input.value = 'hello my name is bryan johnson';
             if (typeof updateOutput === 'function') {
               updateOutput();
             }
