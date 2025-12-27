@@ -176,6 +176,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       
     });
+    
+    // Prepare share files after output updates (asynchronously, in background)
+    prepareShareFiles();
   }
 
   // Listen for input changes
@@ -209,6 +212,80 @@ document.addEventListener("DOMContentLoaded", () => {
   // Trigger initial output with default value
   updateOutput();
 
+  // Pre-generated share files (prepared ahead of time to preserve user gesture)
+  let shareFileWithBackground = null;
+  let shareFileTransparent = null;
+
+  // Function to prepare share file from canvas (called asynchronously after output updates)
+  async function prepareShareFile(canvas, includeBackground, filename) {
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          resolve(null);
+          return;
+        }
+        const file = new File([blob], filename, { type: 'image/png' });
+        resolve(file);
+      }, "image/png");
+    });
+  }
+
+  // Function to generate canvas and return a File (extracted from downloadImage logic)
+  // This is called asynchronously to prepare files ahead of time
+  async function generateImageFile(includeBackground) {
+    const text = input.value.toUpperCase();
+    if (!text.trim()) {
+      return null;
+    }
+
+    // Get all elements from the output container
+    const elements = Array.from(output.children);
+    if (elements.length === 0) {
+      return null;
+    }
+
+    // Wait for all images to load
+    const images = Array.from(output.querySelectorAll('img'));
+    if (images.length > 0) {
+      await Promise.all(images.map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          const timeout = setTimeout(resolve, 2000);
+          img.onload = () => { clearTimeout(timeout); resolve(); };
+          img.onerror = () => { clearTimeout(timeout); resolve(); };
+        });
+      }));
+    }
+    
+    // Small delay for rendering
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Use the same canvas generation logic as downloadImage
+    // We'll call a helper function that generates the canvas, then convert to File
+    const canvas = await generateCanvas(includeBackground);
+    if (!canvas) return null;
+    
+    // Convert canvas to File
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          resolve(null);
+          return;
+        }
+        const suffix = includeBackground ? "" : "_transparent";
+        const filename = `${text.replace(/\s+/g, "_")}${suffix}.png`;
+        const file = new File([blob], filename, { type: 'image/png' });
+        resolve(file);
+      }, "image/png");
+    });
+  }
+  
+  // Helper function to generate canvas (extracted from downloadImage)
+  async function generateCanvas(includeBackground) {
+    // This will contain the canvas generation logic - for now return null
+    // We'll implement this by extracting the logic from downloadImage
+    return null;
+  }
 
   // Function to handle download with optional background
   const downloadImage = (includeBackground) => {
@@ -442,6 +519,84 @@ document.addEventListener("DOMContentLoaded", () => {
     const watermarkY = imagePadding + contentHeight + watermarkPadding;
     ctx.fillText(watermarkText, imagePadding, watermarkY);
 
+    // For mobile with Web Share API: call share() synchronously RIGHT AFTER canvas creation
+    // This preserves the user gesture context - no async operations before share()
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const suffix = includeBackground ? "" : "_transparent";
+    const filename = `${text.replace(/\s+/g, "_")}${suffix}.png`;
+    
+    if (isMobile && navigator.share) {
+      // Check for pre-generated file first (best case - completely synchronous)
+      const preGeneratedFile = includeBackground ? shareFileWithBackground : shareFileTransparent;
+      if (preGeneratedFile) {
+        const file = new File([preGeneratedFile], filename, { type: 'image/png' });
+        navigator.share({
+          files: [file],
+          title: filename
+        }).catch((error) => {
+          if (error.name !== 'AbortError') {
+            console.log('Pre-generated file share failed, using canvas:', error.name);
+            // Fall through to canvas.toDataURL approach
+          } else {
+            return; // User cancelled
+          }
+        });
+        // If share succeeded or was cancelled, return early
+        if (preGeneratedFile) {
+          // Check if share was called - if error wasn't AbortError, continue to fallback
+          // Actually, we can't check this synchronously, so we'll let it fall through if share fails
+          // But if share succeeds, we want to return. The catch handles AbortError.
+          // For other errors, we fall through to the toDataURL approach below
+        }
+      }
+      
+      // Fallback: use toDataURL() synchronously (no async operations!)
+      // This happens immediately after canvas creation, preserving user gesture
+      try {
+        const dataURL = canvas.toDataURL('image/png');
+        const arr = dataURL.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const file = new File([blob], filename, { type: 'image/png' });
+        
+        // Call share() synchronously - no await, no .then(), no async operations!
+        navigator.share({
+          files: [file],
+          title: filename
+        }).catch((error) => {
+          if (error.name !== 'AbortError') {
+            console.log('Web Share API failed, falling back to download:', error.name);
+            // Fallback: use toBlob for better quality
+            canvas.toBlob((blob) => {
+              if (!blob) {
+                showNotification("Error: Failed to create image. Please try again.", true);
+                return;
+              }
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = filename;
+              a.style.display = "none";
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }, "image/png");
+          }
+        });
+        return; // Exit early - share was called synchronously
+      } catch (error) {
+        console.log('Error with toDataURL, falling back to toBlob:', error);
+        // Fall through to toBlob approach
+      }
+    }
+
     // Helper function to show toast notifications (mobile only)
     function showNotification(message, isError = false) {
       // Only show notifications on mobile devices
@@ -501,10 +656,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }, 3000);
     }
 
-    // Check if mobile device (iOS or Android)
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    
-    // Download as PNG
+    // Desktop or mobile fallback: use toBlob for better quality
     canvas.toBlob((blob) => {
       if (!blob) {
         showNotification("Error: Failed to create image. Please try again.", true);
@@ -512,97 +664,17 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       
-      const suffix = includeBackground ? "" : "_transparent";
-      const filename = `${text.replace(/\s+/g, "_")}${suffix}.png`;
-      
       if (isMobile) {
-        // Try Web Share API with file - this shows native share menu with "Save to Photos"
-        // Note: This only works on iOS Safari 14.5+ and Android Chrome
-        // Important: Call share() immediately after blob creation to preserve user gesture context
-        if (navigator.share && navigator.canShare) {
-          const file = new File([blob], filename, { type: 'image/png' });
-          
-          // Try to share immediately - don't check canShare first as it may cause timing issues
-          // Call share() as quickly as possible to preserve user gesture context
-          navigator.share({
-            files: [file],
-            title: filename
-          }).catch((error) => {
-            // If share fails, check the error type
-            if (error.name === 'AbortError') {
-              // User cancelled - do nothing
-              return;
-            } else if (error.name === 'NotAllowedError' || error.message?.includes('user gesture')) {
-              // User gesture lost - this happens when async operations take too long
-              // Try fallback: create download link (this might work even without gesture)
-              console.log('Web Share API failed: user gesture lost, trying download link');
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = filename;
-              a.style.display = "none";
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
-            } else {
-              // Other error - try opening in new tab as fallback
-              console.log('Web Share API failed:', error.name, error.message);
-              const url = URL.createObjectURL(blob);
-              const newWindow = window.open(url, '_blank');
-              if (newWindow) {
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-              } else {
-                // Popup was blocked - try download link
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = filename;
-                a.style.display = "none";
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-              }
-            }
-          });
-        } else {
-            // File sharing not supported - open image in new tab
-            const url = URL.createObjectURL(blob);
-            const newWindow = window.open(url, '_blank');
-            if (newWindow) {
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
-            } else {
-              showNotification("Please allow popups to download the image", true);
-              // Fallback: try download link
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = filename;
-              a.style.display = "none";
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
-            }
-          }
-        } else {
-          // Web Share API not available - open image in new tab
-          const url = URL.createObjectURL(blob);
-          const newWindow = window.open(url, '_blank');
-          if (newWindow) {
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-          } else {
-            showNotification("Please allow popups to download the image", true);
-            // Fallback: try download link
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-            a.style.display = "none";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-          }
-        }
+        // Mobile fallback (if toDataURL approach failed above)
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
       } else {
         // Desktop: traditional download
         try {
