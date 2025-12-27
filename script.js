@@ -533,41 +533,29 @@ document.addEventListener("DOMContentLoaded", () => {
                   }).then(() => {
                     showNotification("Image saved successfully!");
                   }).catch((error) => {
-                    // Share failed or cancelled, fallback to image display
+                    // User cancelled or share failed - don't show error for cancellation
                     if (error.name !== 'AbortError') {
-                      console.log('Web Share API failed, falling back to image display:', error);
-                      showNotification("Opening image for download...", false);
-                      showImageForDownload(dataUrl, filename);
+                      console.log('Web Share API failed:', error);
+                      showNotification("Error sharing image. Please try again.", true);
                     }
-                    // AbortError means user cancelled, don't show error
                   });
                 } else {
-                  // Can't share files, try sharing URL instead
-                  navigator.share({
-                    title: filename,
-                    text: 'Download this image',
-                    url: dataUrl
-                  }).then(() => {
-                    showNotification("Image shared successfully!");
-                  }).catch((error) => {
-                    // Share failed, fallback to image display
-                    if (error.name !== 'AbortError') {
-                      console.log('Web Share API failed, falling back to image display:', error);
-                      showNotification("Opening image for download...", false);
-                      showImageForDownload(dataUrl, filename);
-                    }
-                  });
+                  // Can't share files directly, create a blob URL and open it
+                  // User can then use native long-press to save
+                  const url = URL.createObjectURL(blob);
+                  window.open(url, '_blank');
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
                 }
               })
               .catch((error) => {
                 console.log('Error converting to blob for share:', error);
-                showNotification("Error preparing image. Showing download option...", true);
-                showImageForDownload(dataUrl, filename);
+                showNotification("Error preparing image. Please try again.", true);
               });
           } else {
-            // Web Share API not available, show image for download
-            showNotification("Opening image for download...", false);
-            showImageForDownload(dataUrl, filename);
+            // Web Share API not available - open image in new tab for native save
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
           }
         };
         reader.onerror = function() {
@@ -592,13 +580,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
       
-      // Helper function to display image for mobile users (fallback if Web Share fails)
+      // Helper function - not used on mobile (Web Share API handles everything)
       function showImageForDownload(dataUrl, filename) {
-        // For mobile, use the minimal save option
-        if (isMobile) {
-          showMobileSaveOption();
-        } else {
-          // Desktop fallback: just open in new tab
+        // Desktop fallback: just open in new tab
+        if (!isMobile) {
           window.open(dataUrl, '_blank');
         }
       }
@@ -696,13 +681,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   if (isMobile) {
-    // Mobile: long-press for minimal save option
+    // Mobile: long-press to trigger native share menu
     output.addEventListener('touchstart', (e) => {
       isLongPress = false;
       longPressTimer = setTimeout(() => {
         isLongPress = true;
         e.preventDefault();
-        showMobileSaveOption();
+        // Trigger download to get the image, then share it
+        downloadImage(true);
       }, 500); // 500ms for long-press
     });
     
@@ -736,95 +722,4 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   // Desktop: Allow default right-click menu (including "Save image as")
   
-  // Mobile: Show minimal save option with scale/fade effect
-  function showMobileSaveOption() {
-    // Create overlay with faded background
-    const overlay = document.createElement('div');
-    overlay.id = 'mobile-save-overlay';
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      z-index: 10000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    `;
-    
-    // Clone and scale up the output
-    const outputClone = output.cloneNode(true);
-    outputClone.style.cssText = `
-      transform: scale(1.1);
-      transition: transform 0.3s ease;
-      background: transparent;
-      padding: 20px;
-      max-width: 90%;
-      max-height: 80vh;
-      overflow: auto;
-    `;
-    
-    // Save button
-    const saveBtn = document.createElement('button');
-    saveBtn.textContent = 'Save to Photos';
-    saveBtn.style.cssText = `
-      margin-top: 20px;
-      padding: 12px 24px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      background: #73B2FF;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-family: 'Work Sans', sans-serif;
-    `;
-    
-    saveBtn.onclick = () => {
-      downloadImage(true);
-      closeMobileSaveOption();
-    };
-    
-    const container = document.createElement('div');
-    container.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    `;
-    
-    container.appendChild(outputClone);
-    container.appendChild(saveBtn);
-    overlay.appendChild(container);
-    
-    // Close on background click
-    overlay.onclick = (e) => {
-      if (e.target === overlay) {
-        closeMobileSaveOption();
-      }
-    };
-    
-    document.body.appendChild(overlay);
-    
-    // Animate in
-    requestAnimationFrame(() => {
-      overlay.style.opacity = '1';
-    });
-  }
-  
-  function closeMobileSaveOption() {
-    const overlay = document.getElementById('mobile-save-overlay');
-    if (overlay) {
-      overlay.style.opacity = '0';
-      setTimeout(() => {
-        if (overlay.parentNode) {
-          overlay.parentNode.removeChild(overlay);
-        }
-      }, 300);
-    }
-  }
 });
