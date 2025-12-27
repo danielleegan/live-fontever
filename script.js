@@ -205,6 +205,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Trigger initial output with default value
   updateOutput();
 
+
   // Function to handle download with optional background
   const downloadImage = (includeBackground) => {
     console.log("Download button clicked", includeBackground ? "(with background)" : "(transparent)");
@@ -591,70 +592,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
       
-      // Helper function to display image for mobile users to long-press and save
+      // Helper function to display image for mobile users (fallback if Web Share fails)
       function showImageForDownload(dataUrl, filename) {
-        // Create a fullscreen overlay with the image
-        const overlay = document.createElement('div');
-        overlay.style.cssText = `
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          background: rgba(0, 0, 0, 0.9);
-          z-index: 10000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-direction: column;
-          padding: 20px;
-        `;
-        
-        const img = document.createElement('img');
-        img.src = dataUrl;
-        img.style.cssText = `
-          max-width: 100%;
-          max-height: 80vh;
-          object-fit: contain;
-        `;
-        
-        const instruction = document.createElement('p');
-        instruction.textContent = 'Long-press the image to save to your photos';
-        instruction.style.cssText = `
-          color: white;
-          margin-top: 20px;
-          font-size: 18px;
-          text-align: center;
-        `;
-        
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = 'Close';
-        closeBtn.style.cssText = `
-          margin-top: 20px;
-          padding: 10px 20px;
-          font-size: 16px;
-          cursor: pointer;
-          background: #4CAF50;
-          color: white;
-          border: none;
-          border-radius: 5px;
-        `;
-        closeBtn.onclick = () => {
-          document.body.removeChild(overlay);
-          // Show success message when closing overlay (user likely saved the image)
-          showNotification("Image ready! If you saved it, it's in your photos.");
-        };
-        
-        overlay.appendChild(img);
-        overlay.appendChild(instruction);
-        overlay.appendChild(closeBtn);
-        overlay.onclick = (e) => {
-          if (e.target === overlay) {
-            document.body.removeChild(overlay);
-          }
-        };
-        
-        document.body.appendChild(overlay);
+        // For mobile, use the minimal save option
+        if (isMobile) {
+          showMobileSaveOption();
+        } else {
+          // Desktop fallback: just open in new tab
+          window.open(dataUrl, '_blank');
+        }
       }
     }, "image/png");
   };
@@ -727,52 +673,158 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }, 200);
 
-  // Prevent image save on long-press and add download functionality to output area
+  // Mobile: long-press for save option
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   let longPressTimer = null;
   let isLongPress = false;
   
-  // Prevent context menu (right-click/long-press) on images in output
-  output.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    // Trigger download on long-press/right-click
-    downloadImage(true);
-  });
+  // Desktop: prevent all downloads from output area
+  if (!isMobile) {
+    // Prevent context menu on images in output
+    output.addEventListener('contextmenu', (e) => {
+      if (e.target.tagName === 'IMG' && e.target.closest('#output')) {
+        e.preventDefault();
+      }
+    }, true);
+    
+    // Prevent image dragging
+    output.addEventListener('dragstart', (e) => {
+      if (e.target.tagName === 'IMG') {
+        e.preventDefault();
+      }
+    });
+  }
   
-  // Handle touch events for mobile long-press
-  output.addEventListener('touchstart', (e) => {
-    isLongPress = false;
-    longPressTimer = setTimeout(() => {
-      isLongPress = true;
-      e.preventDefault();
+  if (isMobile) {
+    // Mobile: long-press for minimal save option
+    output.addEventListener('touchstart', (e) => {
+      isLongPress = false;
+      longPressTimer = setTimeout(() => {
+        isLongPress = true;
+        e.preventDefault();
+        showMobileSaveOption();
+      }, 500); // 500ms for long-press
+    });
+    
+    output.addEventListener('touchend', (e) => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      if (isLongPress) {
+        e.preventDefault();
+      }
+    });
+    
+    output.addEventListener('touchmove', (e) => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    });
+    
+    // Prevent image dragging on mobile
+    output.addEventListener('dragstart', (e) => {
+      if (e.target.tagName === 'IMG') {
+        e.preventDefault();
+      }
+    });
+    
+    // Prevent image selection on mobile
+    output.style.userSelect = 'none';
+    output.style.webkitUserSelect = 'none';
+  }
+  // Desktop: Allow default right-click menu (including "Save image as")
+  
+  // Mobile: Show minimal save option with scale/fade effect
+  function showMobileSaveOption() {
+    // Create overlay with faded background
+    const overlay = document.createElement('div');
+    overlay.id = 'mobile-save-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    `;
+    
+    // Clone and scale up the output
+    const outputClone = output.cloneNode(true);
+    outputClone.style.cssText = `
+      transform: scale(1.1);
+      transition: transform 0.3s ease;
+      background: transparent;
+      padding: 20px;
+      max-width: 90%;
+      max-height: 80vh;
+      overflow: auto;
+    `;
+    
+    // Save button
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save to Photos';
+    saveBtn.style.cssText = `
+      margin-top: 20px;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      background: #73B2FF;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Work Sans', sans-serif;
+    `;
+    
+    saveBtn.onclick = () => {
       downloadImage(true);
-    }, 500); // 500ms for long-press
-  });
+      closeMobileSaveOption();
+    };
+    
+    const container = document.createElement('div');
+    container.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    `;
+    
+    container.appendChild(outputClone);
+    container.appendChild(saveBtn);
+    overlay.appendChild(container);
+    
+    // Close on background click
+    overlay.onclick = (e) => {
+      if (e.target === overlay) {
+        closeMobileSaveOption();
+      }
+    };
+    
+    document.body.appendChild(overlay);
+    
+    // Animate in
+    requestAnimationFrame(() => {
+      overlay.style.opacity = '1';
+    });
+  }
   
-  output.addEventListener('touchend', (e) => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
+  function closeMobileSaveOption() {
+    const overlay = document.getElementById('mobile-save-overlay');
+    if (overlay) {
+      overlay.style.opacity = '0';
+      setTimeout(() => {
+        if (overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+      }, 300);
     }
-    if (isLongPress) {
-      e.preventDefault();
-    }
-  });
-  
-  output.addEventListener('touchmove', (e) => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
-  });
-  
-  // Prevent image dragging
-  output.addEventListener('dragstart', (e) => {
-    if (e.target.tagName === 'IMG') {
-      e.preventDefault();
-    }
-  });
-  
-  // Prevent image selection
-  output.style.userSelect = 'none';
-  output.style.webkitUserSelect = 'none';
+  }
 });
