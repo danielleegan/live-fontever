@@ -9,6 +9,18 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
+  // PostHog tracking variables
+  let hasTyped = false;
+  let inputCount = 0;
+  let downloadCount = 0;
+  
+  // Helper function to safely track events
+  function trackEvent(eventName, properties = {}) {
+    if (typeof posthog !== 'undefined' && posthog.capture) {
+      posthog.capture(eventName, properties);
+    }
+  }
+
   // Parallax scrolling effect for background images
   const parallaxLeft = document.querySelector('.parallax-left');
   const parallaxRight = document.querySelector('.parallax-right');
@@ -163,7 +175,32 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Listen for input changes
-  input.addEventListener("input", updateOutput);
+  // Track input events
+  input.addEventListener("input", () => {
+    const text = input.value.trim();
+    
+    // Track first time user types
+    if (!hasTyped && text.length > 0) {
+      hasTyped = true;
+      trackEvent('user_started_typing', {
+        initial_text_length: text.length
+      });
+    }
+    
+    // Track each input change (debounced to avoid too many events)
+    if (text.length > 0) {
+      inputCount++;
+      // Only track every 5th character change to avoid spam
+      if (inputCount % 5 === 0 || text.length === 1) {
+        trackEvent('user_typing', {
+          text_length: text.length,
+          input_count: inputCount
+        });
+      }
+    }
+    
+    updateOutput();
+  });
   
   // Trigger initial output with default value
   updateOutput();
@@ -627,13 +664,37 @@ document.addEventListener("DOMContentLoaded", () => {
     }, "image/png");
   };
 
-  downloadBtn.addEventListener("click", () => downloadImage(true));
-  downloadTransparentBtn.addEventListener("click", () => downloadImage(false));
+  downloadBtn.addEventListener("click", () => {
+    downloadCount++;
+    trackEvent('download_clicked', {
+      download_type: 'with_background',
+      download_number: downloadCount,
+      text_length: input.value.trim().length,
+      has_typed: hasTyped
+    });
+    downloadImage(true);
+  });
+  
+  downloadTransparentBtn.addEventListener("click", () => {
+    downloadCount++;
+    trackEvent('download_clicked', {
+      download_type: 'transparent',
+      download_number: downloadCount,
+      text_length: input.value.trim().length,
+      has_typed: hasTyped
+    });
+    downloadImage(false);
+  });
 
   // Share button functionality
   const shareButton = document.getElementById("shareButton");
   if (shareButton) {
     shareButton.addEventListener("click", () => {
+      trackEvent('share_clicked', {
+        text_length: input.value.trim().length,
+        has_typed: hasTyped,
+        input_count: inputCount
+      });
       const message = "hey man, i thought you specifically would enjoy looking at this little naked man as a font www.livefontever.com";
       const smsLink = `sms:?body=${encodeURIComponent(message)}`;
       window.location.href = smsLink;
