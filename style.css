@@ -365,7 +365,7 @@ body {
 /* Responsive design */
 @media (max-width: 768px) {
   .main-content {
-    padding: 20px 20px 60px;
+    padding: 20px 20px 200px;
   }
 
   .parallax-left,
@@ -380,8 +380,8 @@ body {
   }
 
   .parallax-right {
+    top: 0;
     bottom: 0;
-    top: auto;
   }
 
   .title-image {
