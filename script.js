@@ -518,39 +518,54 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isMobile) {
         // Try Web Share API with file - this shows native share menu with "Save to Photos"
         // Note: This only works on iOS Safari 14.5+ and Android Chrome
+        // Important: Call share() immediately after blob creation to preserve user gesture context
         if (navigator.share && navigator.canShare) {
           const file = new File([blob], filename, { type: 'image/png' });
           
-          // Check if file sharing is supported
-          if (navigator.canShare({ files: [file] })) {
-            navigator.share({
-              files: [file],
-              title: filename
-            }).catch((error) => {
-              // If share fails (not user abort), fallback to opening image
-              if (error.name !== 'AbortError') {
-                console.log('Web Share API failed, opening image in new tab');
-                const url = URL.createObjectURL(blob);
-                // Try to open - may be blocked by popup blocker, but that's acceptable fallback
-                const newWindow = window.open(url, '_blank');
-                if (newWindow) {
-                  setTimeout(() => URL.revokeObjectURL(url), 1000);
-                } else {
-                  // Popup was blocked - show notification
-                  showNotification("Please allow popups to download the image", true);
-                  // Also try creating a download link as last resort
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = filename;
-                  a.style.display = "none";
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  setTimeout(() => URL.revokeObjectURL(url), 1000);
-                }
+          // Try to share immediately - don't check canShare first as it may cause timing issues
+          // Call share() as quickly as possible to preserve user gesture context
+          navigator.share({
+            files: [file],
+            title: filename
+          }).catch((error) => {
+            // If share fails, check the error type
+            if (error.name === 'AbortError') {
+              // User cancelled - do nothing
+              return;
+            } else if (error.name === 'NotAllowedError' || error.message?.includes('user gesture')) {
+              // User gesture lost - this happens when async operations take too long
+              // Try fallback: create download link (this might work even without gesture)
+              console.log('Web Share API failed: user gesture lost, trying download link');
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = filename;
+              a.style.display = "none";
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } else {
+              // Other error - try opening in new tab as fallback
+              console.log('Web Share API failed:', error.name, error.message);
+              const url = URL.createObjectURL(blob);
+              const newWindow = window.open(url, '_blank');
+              if (newWindow) {
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              } else {
+                // Popup was blocked - try download link
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = filename;
+                a.style.display = "none";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
               }
-            });
-          } else {
+            }
+          });
+        } else {
             // File sharing not supported - open image in new tab
             const url = URL.createObjectURL(blob);
             const newWindow = window.open(url, '_blank');
