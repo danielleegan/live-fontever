@@ -690,7 +690,7 @@ document.addEventListener("DOMContentLoaded", () => {
         has_typed: hasTyped,
         input_count: inputCount
       });
-      const message = "hey man, i thought you specifically would enjoy looking at this little naked man as a font www.livefontever.com";
+      const message = "hey man, i thought you specifically would enjoy looking at this little naked man as a font https://livefontever.com";
       const smsLink = `sms:?body=${encodeURIComponent(message)}`;
       window.location.href = smsLink;
     });
