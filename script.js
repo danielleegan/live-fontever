@@ -178,7 +178,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     // Prepare share files after output updates (asynchronously, in background)
-    prepareShareFiles();
+    // Wrap in try-catch to prevent errors from breaking word creation
+    try {
+      prepareShareFiles().catch(err => {
+        console.error('Error preparing share files (non-critical):', err);
+      });
+    } catch (err) {
+      console.error('Error calling prepareShareFiles (non-critical):', err);
+    }
   }
 
   // Listen for input changes
@@ -285,6 +292,43 @@ document.addEventListener("DOMContentLoaded", () => {
     // This will contain the canvas generation logic - for now return null
     // We'll implement this by extracting the logic from downloadImage
     return null;
+  }
+
+  // Function to prepare share files after output updates (called asynchronously)
+  async function prepareShareFiles() {
+    shareFileWithBackground = null;
+    shareFileTransparent = null;
+    
+    const text = input.value.toUpperCase();
+    if (!text.trim()) {
+      return;
+    }
+
+    // Wait for images to load
+    const images = Array.from(output.querySelectorAll('img'));
+    if (images.length > 0) {
+      await Promise.all(images.map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(resolve => {
+          const timeout = setTimeout(resolve, 2000);
+          img.onload = () => { clearTimeout(timeout); resolve(); };
+          img.onerror = () => { clearTimeout(timeout); resolve(); };
+        });
+      }));
+    }
+    
+    // Small delay for rendering
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Generate both files (for now, this will return null since generateCanvas returns null)
+    // This is a placeholder - files will be generated on-demand in downloadImage
+    try {
+      shareFileWithBackground = await generateImageFile(true);
+      shareFileTransparent = await generateImageFile(false);
+    } catch (error) {
+      console.error('Error preparing share files:', error);
+      // Don't throw - this is background preparation, shouldn't break the app
+    }
   }
 
   // Function to handle download with optional background
