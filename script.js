@@ -504,20 +504,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Check if mobile device (iOS or Android)
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
-    // For mobile fallback, open window synchronously during user click to avoid popup blocker
-    let fallbackWindow = null;
-    if (isMobile && (!navigator.share || !navigator.canShare)) {
-      // Open blank window synchronously (during user click event)
-      fallbackWindow = window.open('', '_blank');
-      if (fallbackWindow) {
-        fallbackWindow.document.write('<html><body style="margin:0;padding:0;background:#000;"><p style="color:white;padding:20px;">Loading image...</p></body></html>');
-      }
-    }
-    
     // Download as PNG
     canvas.toBlob((blob) => {
       if (!blob) {
-        if (fallbackWindow) fallbackWindow.close();
         showNotification("Error: Failed to create image. Please try again.", true);
         console.error("Failed to create blob from canvas");
         return;
@@ -538,60 +527,65 @@ document.addEventListener("DOMContentLoaded", () => {
               files: [file],
               title: filename
             }).catch((error) => {
-              // If share fails, use the pre-opened fallback window
+              // If share fails (not user abort), fallback to opening image
               if (error.name !== 'AbortError') {
-                console.log('Web Share API failed, using fallback window');
-                if (fallbackWindow) {
-                  const url = URL.createObjectURL(blob);
-                  fallbackWindow.location.href = url;
+                console.log('Web Share API failed, opening image in new tab');
+                const url = URL.createObjectURL(blob);
+                // Try to open - may be blocked by popup blocker, but that's acceptable fallback
+                const newWindow = window.open(url, '_blank');
+                if (newWindow) {
                   setTimeout(() => URL.revokeObjectURL(url), 1000);
                 } else {
-                  // Fallback window was blocked, try direct open (may be blocked)
-                  const url = URL.createObjectURL(blob);
-                  const newWindow = window.open(url, '_blank');
-                  if (newWindow) {
-                    setTimeout(() => URL.revokeObjectURL(url), 1000);
-                  } else {
-                    showNotification("Please allow popups to download the image", true);
-                  }
+                  // Popup was blocked - show notification
+                  showNotification("Please allow popups to download the image", true);
+                  // Also try creating a download link as last resort
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = filename;
+                  a.style.display = "none";
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
                 }
-              } else if (fallbackWindow) {
-                // User aborted share, close fallback window
-                fallbackWindow.close();
               }
             });
           } else {
-            // File sharing not supported - use pre-opened fallback window
-            if (fallbackWindow) {
-              const url = URL.createObjectURL(blob);
-              fallbackWindow.location.href = url;
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
-            } else {
-              // Fallback window was blocked, try direct open (may be blocked)
-              const url = URL.createObjectURL(blob);
-              const newWindow = window.open(url, '_blank');
-              if (newWindow) {
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-              } else {
-                showNotification("Please allow popups to download the image", true);
-              }
-            }
-          }
-        } else {
-          // Web Share API not available - use pre-opened fallback window
-          if (fallbackWindow) {
-            const url = URL.createObjectURL(blob);
-            fallbackWindow.location.href = url;
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-          } else {
-            // Fallback window was blocked, try direct open (may be blocked)
+            // File sharing not supported - open image in new tab
             const url = URL.createObjectURL(blob);
             const newWindow = window.open(url, '_blank');
             if (newWindow) {
               setTimeout(() => URL.revokeObjectURL(url), 1000);
             } else {
               showNotification("Please allow popups to download the image", true);
+              // Fallback: try download link
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = filename;
+              a.style.display = "none";
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
             }
+          }
+        } else {
+          // Web Share API not available - open image in new tab
+          const url = URL.createObjectURL(blob);
+          const newWindow = window.open(url, '_blank');
+          if (newWindow) {
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } else {
+            showNotification("Please allow popups to download the image", true);
+            // Fallback: try download link
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.style.display = "none";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
           }
         }
       } else {
