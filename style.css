@@ -386,7 +386,7 @@ body {
 @media (max-width: 768px) {
   .main-content {
     max-width: 100%;
-    padding: 20px 20px 500px;
+    padding: 20px 20px 150px;
   }
 
   .parallax-left,
@@ -518,7 +518,7 @@ body {
 @media (max-width: 480px) {
   .main-content {
     max-width: 100%;
-    padding: 15px 15px 500px;
+    padding: 15px 15px 150px;
   }
 
   .parallax-left,
