@@ -30,16 +30,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const isMobile = window.innerWidth <= 768;
     
     // More dramatic parallax on mobile, but not so much they disappear
+    // Use the same speed for both images to ensure symmetric movement
     const parallaxSpeed = isMobile ? 0.6 : 0.3;
+    const moveDistance = scrolled * parallaxSpeed;
     
     if (parallaxLeft) {
       // Left image moves down as you scroll
-      parallaxLeft.style.transform = `translateY(${scrolled * parallaxSpeed}px)`;
+      parallaxLeft.style.transform = `translateY(${moveDistance}px)`;
     }
     
     if (parallaxRight) {
-      // Right image moves up as you scroll (opposite direction)
-      parallaxRight.style.transform = `translateY(${-scrolled * parallaxSpeed}px)`;
+      // Right image moves up as you scroll (opposite direction, same distance)
+      parallaxRight.style.transform = `translateY(${-moveDistance}px)`;
     }
   }
   
