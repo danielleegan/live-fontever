@@ -619,8 +619,14 @@ document.addEventListener("DOMContentLoaded", () => {
     // Check if mobile device (iOS or Android)
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
+    // Determine image format and quality based on background
+    // Use JPEG with compression for images with background (smaller file size)
+    // Use PNG for transparent images (required for transparency)
+    const imageFormat = includeBackground ? "image/jpeg" : "image/png";
+    const imageQuality = includeBackground ? 0.85 : undefined; // JPEG quality (0.85 = 85% quality, good balance)
+    const fileExtension = includeBackground ? ".jpg" : ".png";
     const suffix = includeBackground ? "" : "_transparent";
-    const filename = `${text.replace(/\s+/g, "_")}${suffix}.png`;
+    const filename = `${text.replace(/\s+/g, "_")}${suffix}${fileExtension}`;
     
     // Helper function to convert data URL to blob synchronously
     function dataURLToBlob(dataURL) {
@@ -639,9 +645,9 @@ document.addEventListener("DOMContentLoaded", () => {
       // For mobile, use toDataURL() synchronously to preserve user gesture context
       // This allows us to call navigator.share() immediately without waiting for async toBlob
       try {
-        const dataURL = canvas.toDataURL('image/png');
+        const dataURL = canvas.toDataURL(imageFormat, imageQuality);
         const blob = dataURLToBlob(dataURL);
-        const file = new File([blob], filename, { type: 'image/png' });
+        const file = new File([blob], filename, { type: imageFormat });
         
         // Check if file sharing is actually supported (some extensions block this)
         let canShareFile = false;
@@ -659,19 +665,62 @@ document.addEventListener("DOMContentLoaded", () => {
             files: [file],
             title: filename
           }).catch((error) => {
-            // If share fails, fallback to data URL approach
+            // If share fails, fallback to download approach
             if (error.name === 'AbortError') {
               // User cancelled - do nothing
               return;
             }
             
             console.log('Web Share API failed, falling back to download:', error.name, error.message);
-            // Fallback: use data URL and open in new tab (Chrome mobile can save data URLs via long-press)
-            // Chrome mobile has issues with blob URLs and download attribute - data URLs work better
-            // Note: If this fails, it might be due to browser extensions blocking popups
+            // Fallback: Try blob URL download first (better support than data URL)
+            // Create blob URL synchronously to preserve user gesture context
+            const blobUrl = URL.createObjectURL(blob);
+            try {
+              const a = document.createElement("a");
+              a.href = blobUrl;
+              a.download = filename;
+              a.style.display = "none";
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              // Clean up blob URL after a short delay
+              setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+            } catch (downloadError) {
+              // If download fails, fallback to opening data URL in new tab
+              console.log('Download link failed, opening in new tab:', downloadError);
+              URL.revokeObjectURL(blobUrl);
+              const newWindow = window.open(dataURL, '_blank');
+              if (!newWindow) {
+                // Last resort: try data URL download
+                const a = document.createElement("a");
+                a.href = dataURL;
+                a.download = filename;
+                a.style.display = "none";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+              }
+            }
+          });
+        } else {
+          // File sharing not supported - try blob URL download immediately
+          console.log('File sharing not supported, using blob URL download');
+          const blobUrl = URL.createObjectURL(blob);
+          try {
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = filename;
+            a.style.display = "none";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+          } catch (downloadError) {
+            // If download fails, fallback to opening data URL
+            console.log('Download link failed, opening in new tab:', downloadError);
+            URL.revokeObjectURL(blobUrl);
             const newWindow = window.open(dataURL, '_blank');
             if (!newWindow) {
-              // Popup blocked (likely by extension) - try download link as last resort
               const a = document.createElement("a");
               a.href = dataURL;
               a.download = filename;
@@ -680,19 +729,6 @@ document.addEventListener("DOMContentLoaded", () => {
               a.click();
               document.body.removeChild(a);
             }
-          });
-        } else {
-          // File sharing not supported - use data URL fallback immediately
-          console.log('File sharing not supported, using data URL fallback');
-          const newWindow = window.open(dataURL, '_blank');
-          if (!newWindow) {
-            const a = document.createElement("a");
-            a.href = dataURL;
-            a.download = filename;
-            a.style.display = "none";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
           }
         }
         return; // Exit early if mobile share was attempted
@@ -702,7 +738,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
     
-    // Desktop or mobile fallback: use toBlob for better quality
+    // Desktop or mobile fallback: use toBlob for better quality with compression
     canvas.toBlob((blob) => {
       if (!blob) {
         showNotification("Error: Failed to create image. Please try again.", true);
@@ -712,13 +748,22 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (isMobile) {
         // Mobile fallback (if toDataURL approach failed above)
-        // Use data URL and open in new tab (Chrome mobile can save data URLs via long-press)
-        // Chrome mobile has issues with blob URLs - data URLs work better
-        const dataURL = canvas.toDataURL('image/png');
-        // Open data URL in new tab - user can long-press image to save
-        const newWindow = window.open(dataURL, '_blank');
-        if (!newWindow) {
-          // Popup blocked - try download link as last resort
+        // Try blob URL download first (better support than data URL)
+        try {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          a.style.display = "none";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          // Clean up blob URL after a short delay
+          setTimeout(() => URL.revokeObjectURL(url), 100);
+        } catch (downloadError) {
+          // If blob URL download fails, fallback to data URL
+          console.log('Blob URL download failed, trying data URL:', downloadError);
+          const dataURL = canvas.toDataURL(imageFormat, imageQuality);
           const a = document.createElement("a");
           a.href = dataURL;
           a.download = filename;
@@ -744,7 +789,7 @@ document.addEventListener("DOMContentLoaded", () => {
           console.error("Download error:", error);
         }
       }
-    }, "image/png");
+    }, imageFormat, imageQuality);
   };
 
   downloadBtn.addEventListener("click", () => {
