@@ -195,7 +195,9 @@ document.addEventListener("DOMContentLoaded", () => {
             controls.hidden = false;
             controls.dataset.ready = 'true';
             syncPlaybackControls();
-            toggle.focus({ preventScroll: true });
+            if (window.matchMedia('(max-width: 768px)').matches) {
+              toggle.focus({ preventScroll: true });
+            }
             // Playback follows the visitor's explicit Play click, never page load.
             event.target.playVideo();
           },
