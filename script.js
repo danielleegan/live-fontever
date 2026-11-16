@@ -1,93 +1,235 @@
+// Fixed export measurements keep messages consistent across phones and computers.
+function createMessageCanvas(text, letterImages, { includeWatermark = true, blueBackground = false } = {}) {
+  const exportScale = 3;
+  const maxWidth = 1200;
+  const padding = 24;
+  const letterHeight = 120;
+  const lineGap = 40;
+  const wordGap = 72;
+  const contentLimit = maxWidth - padding * 2;
+  const words = text.toUpperCase().trim().split(/\s+/)
+    .map(word => Array.from(word).filter(char => /^[A-Z!.?]$/.test(char)))
+    .filter(word => word.length > 0);
+
+  if (!words.length) {
+    throw new Error("Please use letters A–Z or ! . ? to create a message.");
+  }
+
+  const lines = [];
+  let line = { letters: [], width: 0 };
+  const finishLine = () => {
+    if (line.letters.length) lines.push(line);
+    line = { letters: [], width: 0 };
+  };
+
+  for (const word of words) {
+    const letters = word.map(char => {
+      const img = letterImages.get(char);
+      if (!img || !img.complete || !img.naturalWidth || !img.naturalHeight) {
+        throw new Error("The letters are still loading. Please try again in a moment.");
+      }
+      return { img, width: img.naturalWidth / img.naturalHeight * letterHeight };
+    });
+    const wordWidth = letters.reduce((sum, letter) => sum + letter.width, 0);
+    if (line.letters.length && line.width + wordGap + wordWidth > contentLimit) {
+      finishLine();
+    }
+    if (line.letters.length) line.width += wordGap;
+
+    // Only words wider than an entire line are broken between letters.
+    for (const letter of letters) {
+      if (line.width + letter.width > contentLimit) finishLine();
+      line.letters.push({ ...letter, x: line.width });
+      line.width += letter.width;
+    }
+  }
+  finishLine();
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Unable to create the message image. Please try again.");
+  const watermark = "livefontever.com";
+  const contentWidth = Math.max(...lines.map(line => line.width));
+  const contentHeight = lines.length * letterHeight + (lines.length - 1) * lineGap;
+  const watermarkSize = Math.max(14, Math.ceil(contentWidth / 32));
+  const watermarkGap = 16;
+  const exportWidth = Math.ceil(contentWidth + padding * 2) * exportScale;
+  const exportHeight = (padding * 2 + contentHeight + (includeWatermark ? watermarkGap + watermarkSize : 0)) * exportScale;
+  // Reject oversized exports before allocating a large bitmap on a phone.
+  if (exportWidth * exportHeight > 16000000 || exportHeight > 16384) {
+    throw new Error("This message is too long for one image. Please shorten it and try again.");
+  }
+  canvas.width = exportWidth;
+  canvas.height = exportHeight;
+  if (blueBackground) {
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, '#334F97');
+    gradient.addColorStop(1, '#171B3C');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  // Draw from the original assets at 3× resolution without changing wrapping or proportions.
+  ctx.scale(exportScale, exportScale);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  lines.forEach((line, index) => {
+    const y = padding + index * (letterHeight + lineGap);
+    line.letters.forEach(letter => {
+      ctx.drawImage(letter.img, padding + letter.x, y, letter.width, letterHeight);
+    });
+  });
+
+  // Plain white credit sits below the message, aligned to the bottom right.
+  if (includeWatermark) {
+    ctx.save();
+    ctx.font = `${watermarkSize}px "Work Sans", sans-serif`;
+    ctx.textAlign = "right";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillText(watermark, canvas.width / exportScale - padding, padding + contentHeight + watermarkGap, contentWidth);
+    ctx.restore();
+  }
+  return canvas;
+}
+
+function downloadBlob(blob, filename) {
+  if (!blob) throw new Error('Unable to create the image. Please try again.');
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  try {
+    document.body.appendChild(link);
+    link.click();
+  } finally {
+    link.remove();
+    // Browsers may consume the file after click() returns, especially on mobile.
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  const alphabetPlay = document.getElementById('alphabet-play');
+  const controls = document.getElementById('alphabet-controls');
+  const toggle = document.getElementById('alphabet-toggle');
+  const toggleLabel = toggle.querySelector('.alphabet-toggle-label');
+  let alphabetPlayer = null;
+  const setPlaybackState = state => {
+    const playing = [1, 3].includes(state);
+    toggle.dataset.state = playing ? 'pause' : 'play';
+    toggleLabel.textContent = playing ? 'pause' : state === 0 ? 'replay' : 'play';
+    toggle.setAttribute('aria-label', playing ? 'Pause alphabet video' : state === 0 ? 'Replay alphabet video' : 'Play alphabet video');
+  };
+  toggle.addEventListener('click', () => {
+    if (!alphabetPlayer) alphabetPlay.click();
+    else if ([1, 3].includes(alphabetPlayer.getPlayerState())) alphabetPlayer.pauseVideo();
+    else alphabetPlayer.playVideo();
+  });
+  alphabetPlay?.addEventListener('click', () => {
+    const display = document.getElementById('alphabet-display');
+    const status = document.getElementById('alphabet-video-status');
+    const imac = document.getElementById('alphabet-imac');
+    const mute = document.getElementById('alphabet-mute');
+    const restart = document.getElementById('alphabet-restart');
+    alphabetPlay.disabled = true;
+    toggle.disabled = true;
+    status.hidden = false;
+    status.textContent = 'loading video…';
+
+    const showVideoError = () => {
+      controls.hidden = true;
+      status.hidden = false;
+      status.replaceChildren(document.createTextNode('Unable to load the video. '));
+      const link = document.createElement('a');
+      link.href = 'https://www.youtube.com/watch?v=RdZYQ8fPMB0';
+      link.textContent = 'Watch on YouTube';
+      status.append(link);
+    };
+
+    let loadTimeout = setTimeout(showVideoError, 20000);
+    const createPlayer = () => {
+      clearTimeout(loadTimeout);
+      loadTimeout = setTimeout(showVideoError, 20000);
+      const target = document.createElement('div');
+      target.id = 'alphabet-player';
+      display.replaceChildren(target);
+      imac.classList.add('is-playing');
+      new YT.Player(target, {
+        videoId: 'RdZYQ8fPMB0',
+        playerVars: {
+          autoplay: 0,
+          loop: 0,
+          rel: 0,
+          // Match the mobile mouse-control layout in style.css.
+          controls: window.matchMedia('(max-width: 768px)').matches ? 0 : 1,
+          playsinline: 1,
+          origin: window.location.origin,
+          // Do not force captions on. YouTube may honor a viewer's saved preference.
+        },
+        events: {
+          onReady: (event) => {
+            clearTimeout(loadTimeout);
+            status.hidden = true;
+            const frame = event.target.getIframe();
+            frame.classList.add('alphabet-video');
+            frame.title = 'Learn the alphabet with Bryan';
+            const player = event.target;
+            alphabetPlayer = player;
+            toggle.disabled = false;
+            const syncPlaybackControls = () => {
+              setPlaybackState(player.getPlayerState());
+              mute.textContent = player.isMuted() ? 'unmute' : 'mute';
+            };
+            mute.addEventListener('click', () => {
+              const wasMuted = player.isMuted();
+              if (wasMuted) player.unMute();
+              else player.mute();
+              mute.textContent = wasMuted ? 'mute' : 'unmute';
+            });
+            restart.addEventListener('click', () => {
+              player.seekTo(0, true);
+              player.playVideo();
+            });
+            controls.hidden = false;
+            controls.dataset.ready = 'true';
+            syncPlaybackControls();
+            toggle.focus({ preventScroll: true });
+            // Playback follows the visitor's explicit Play click, never page load.
+            event.target.playVideo();
+          },
+          onError: () => { clearTimeout(loadTimeout); showVideoError(); },
+          onAutoplayBlocked: () => {
+            status.hidden = false;
+            status.textContent = 'Tap play to start the video.';
+            setPlaybackState(-1);
+          },
+          onStateChange: (event) => {
+            if (event.data === 1) status.hidden = true;
+            setPlaybackState(event.data);
+          }
+        }
+      });
+    };
+
+    if (window.YT?.Player) {
+      createPlayer();
+    } else {
+      window.onYouTubeIframeAPIReady = createPlayer;
+      const api = document.createElement('script');
+      api.src = 'https://www.youtube.com/iframe_api';
+      api.onerror = () => { clearTimeout(loadTimeout); showVideoError(); };
+      document.head.append(api);
+    }
+  }, { once: true });
+
   const input = document.getElementById("textInput");
   const output = document.getElementById("output");
   
-  // Set default text based on PostHog experiment
-  // 
-  // To set up the experiment in PostHog:
-  // 1. Go to PostHog > Feature Flags
-  // 2. Create a new feature flag with key: 'default-text-experiment'
-  // 3. Set up four variations:
-  //    - Control (or no flag): 'hello my name is bryan johnson'
-  //    - version-1: 'would you spare a little blood for bryan?'
-  //    - version-2: 'hey man hows it going?'
-  //    - version-3: 'i am so scared of death'
-  // 4. Set the rollout percentage (e.g., 25% each)
-  // 5. The code will automatically track which variation each user sees
-  //
-  let experimentTextSet = false;
-  let experimentTimeout = null;
-  
-  function setDefaultTextFromExperiment() {
-    if (typeof posthog !== 'undefined' && posthog.getFeatureFlag) {
-      // Check the feature flag for default text experiment
-      // Feature flag key: 'default-text-experiment'
-      const variation = posthog.getFeatureFlag('default-text-experiment');
-      
-      let defaultText = '';
-      let variationName = 'control';
-      
-      if (variation === 'version-1') {
-        defaultText = 'would you spare a little blood for bryan?';
-        variationName = 'version-1';
-      } else if (variation === 'version-2') {
-        defaultText = 'hey man hows it going?';
-        variationName = 'version-2';
-      } else if (variation === 'version-3') {
-        defaultText = 'i am so scared of death';
-        variationName = 'version-3';
-      } else {
-        // Control or no flag
-        defaultText = 'hello my name is bryan johnson';
-        variationName = 'control';
-      }
-      
-      // Set the input value
-      input.value = defaultText;
-      experimentTextSet = true;
-      
-      // Clear timeout since we got the value
-      if (experimentTimeout) {
-        clearTimeout(experimentTimeout);
-        experimentTimeout = null;
-      }
-      
-      // Track which variation was shown
-      if (typeof posthog !== 'undefined' && posthog.capture) {
-        posthog.capture('experiment_viewed', {
-          experiment_name: 'default-text-experiment',
-          variation: variationName,
-          default_text: defaultText
-        });
-      }
-      
-      // Update output to show the default text (will be called after updateOutput is defined)
-      if (typeof updateOutput === 'function') {
-        updateOutput();
-      }
-      return true; // Successfully set text
-    } else {
-      // Fallback if PostHog not loaded yet - wait a bit and try again
-      // But set a timeout to use control text if PostHog never loads
-      if (!experimentTimeout) {
-        experimentTimeout = setTimeout(() => {
-          if (!experimentTextSet && !input.value.trim()) {
-            // PostHog didn't load in time, use control text as fallback
-            input.value = 'hello my name is bryan johnson';
-            if (typeof updateOutput === 'function') {
-              updateOutput();
-            }
-          }
-        }, 1500); // Wait 1.5 seconds for PostHog to load
-      }
-      setTimeout(setDefaultTextFromExperiment, 300);
-      return false; // Not set yet
-    }
-  }
   const downloadBtn = document.getElementById("download");
-  const downloadTransparentBtn = document.getElementById("downloadTransparent");
 
-  if (!input || !output || !downloadBtn || !downloadTransparentBtn) {
+  if (!input || !output || !downloadBtn) {
     console.error("Required elements not found!");
     return;
   }
@@ -108,7 +250,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const parallaxLeft = document.querySelector('.parallax-left');
   const parallaxRight = document.querySelector('.parallax-right');
   
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   function updateParallax() {
+    if (reducedMotion.matches) {
+      [parallaxLeft, parallaxRight].forEach(image => { if (image) image.style.transform = 'none'; });
+      return;
+    }
     const scrolled = window.pageYOffset;
     const isMobile = window.innerWidth <= 768;
     
@@ -142,11 +289,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
   
+  reducedMotion.addEventListener('change', updateParallax);
   // Initial call
   updateParallax();
 
-  // Set a cache-busting version that only changes on page load, not on every keystroke
-  const imageVersion = Date.now();
+  // Bump only when the letter assets change so repeat visits can use the cache.
+  const imageVersion = "2";
 
   // Helper function to check if character is valid and get filename
   function getImageFilename(char) {
@@ -177,10 +325,7 @@ document.addEventListener("DOMContentLoaded", () => {
       
       // Split text into words (by spaces) to keep words together
       const words = text.split(/(\s+)/);
-      // Calculate max width accounting for mobile padding
-      const isMobile = window.innerWidth <= 768;
-      const padding = isMobile ? 40 : 80;
-      const maxWidth = output.offsetWidth || (window.innerWidth - padding);
+      output.setAttribute('aria-label', text.replace(/[^A-Z!.?\s]/g, '').trim() || 'Your message preview');
       
       for (const word of words) {
         if (word.trim() === "") {
@@ -188,7 +333,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const spaceDiv = document.createElement("div");
           // Smaller spaces for web, keep mobile sizes
           const isMobile = window.innerWidth <= 768;
-          const spaceWidth = isMobile ? 100 : 100;
+          const spaceWidth = 100;
           const spaceHeight = isMobile ? 80 : 100;
           spaceDiv.style.width = `${spaceWidth}px`;
           spaceDiv.style.height = `${spaceHeight}px`;
@@ -200,10 +345,6 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
           // This is a word - wrap it in a container to keep letters together
           const wordContainer = document.createElement("span");
-          wordContainer.style.display = "inline-flex";
-          wordContainer.style.flexWrap = "nowrap";
-          wordContainer.style.flexShrink = "1";
-          wordContainer.style.minWidth = "0";
           wordContainer.className = "word-container";
           
           for (const char of word) {
@@ -215,6 +356,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 // URL encode the filename to handle special characters like "?" in the filename
                 const encodedFilename = encodeURIComponent(filename);
                 img.src = `letters/${encodedFilename}?v=${imageVersion}`;
+                img.alt = "";
                 img.dataset.char = char;
                 img.className = "letter";
                 wordContainer.appendChild(img);
@@ -225,39 +367,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (wordContainer.children.length > 0) {
             output.appendChild(wordContainer);
             
-            // Check if word is longer than the line after images load
-            const checkWordWidth = () => {
-              requestAnimationFrame(() => {
-                const wordWidth = wordContainer.offsetWidth;
-                if (wordWidth > maxWidth) {
-                  // Word is longer than line - allow it to break by removing nowrap
-                  wordContainer.style.flexWrap = "wrap";
-                }
-              });
-            };
-            
-            // Trigger check after all images in the word load
-            const images = Array.from(wordContainer.querySelectorAll('img'));
-            let loadedCount = 0;
-            if (images.length === 0) {
-              checkWordWidth();
-            } else {
-              images.forEach(img => {
-                if (img.complete) {
-                  loadedCount++;
-                  if (loadedCount === images.length) {
-                    checkWordWidth();
-                  }
-                } else {
-                  img.onload = () => {
-                    loadedCount++;
-                    if (loadedCount === images.length) {
-                      checkWordWidth();
-                    }
-                  };
-                }
-              });
-            }
+
           }
         }
       }
@@ -293,517 +403,76 @@ document.addEventListener("DOMContentLoaded", () => {
     updateOutput();
   });
   
-  // Set default text from PostHog experiment after everything is initialized
-  // Try immediately first (PostHog might already be loaded)
-  let textSet = setDefaultTextFromExperiment();
-  
-  if (!textSet) {
-    // PostHog not ready yet, wait for it
-    if (typeof posthog !== 'undefined') {
-      // PostHog already loaded but flags not ready
-      posthog.onFeatureFlags(function() {
-        setDefaultTextFromExperiment();
-      });
-    } else {
-      // Wait for PostHog to load
-      setTimeout(function() {
-        if (typeof posthog !== 'undefined' && posthog.onFeatureFlags) {
-          posthog.onFeatureFlags(function() {
-            setDefaultTextFromExperiment();
-          });
-        } else {
-          // Fallback: try setting default text after a delay
-          setTimeout(setDefaultTextFromExperiment, 800);
-        }
-      }, 200);
-    }
-  }
-  
-  // Only call updateOutput if text was set, otherwise wait for experiment or timeout
-  if (input.value.trim()) {
-    updateOutput();
-  }
+  // Pick once per page load, independently of analytics or feature-flag timing.
+  const defaultMessages = [
+    'will you be my bloodboy?',
+    'i am lowkey scared of death',
+    'hello my name is bryan johnson',
+    'kate and i stayed up past bedtime last night'
+  ];
+  input.value = defaultMessages[Math.floor(Math.random() * defaultMessages.length)];
+  updateOutput();
 
-
-  // Function to handle download with optional background
-  const downloadImage = (includeBackground) => {
-    console.log("Download button clicked", includeBackground ? "(with background)" : "(transparent)");
-    const text = input.value.toUpperCase();
+  // Compose the exported message independently of the webpage's responsive layout.
+  const downloadImage = (message = input.value, preparedLetterImages = null) => {
+    const text = message.toUpperCase();
     if (!text.trim()) {
       alert("Please type something first!");
       return;
     }
-    console.log("Processing text:", text);
 
-    // Get all elements from the output container to preserve the exact layout
-    const elements = Array.from(output.children);
-    if (elements.length === 0) {
-      alert("No content to download!");
+    const letterImages = preparedLetterImages || new Map(
+      Array.from(output.querySelectorAll("img[data-char]"), img => [img.dataset.char, img])
+    );
+    let canvas;
+    try {
+      canvas = createMessageCanvas(text, letterImages);
+    } catch (error) {
+      alert(error.message);
       return;
     }
 
-    // Group elements by line (based on their top position)
-    const lines = [];
-    let currentLine = [];
-    let currentTop = null;
+    const filename = `${text.replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || 'livefontever'}.png`;
+    const reportError = error => {
+      console.error('Unable to share or download image:', error);
+      alert('Unable to save the image. Please try again.');
+    };
+    const saveImage = blob => {
+      try { downloadBlob(blob, filename); }
+      catch (error) { reportError(error); }
+    };
 
-    for (const element of elements) {
-      const rect = element.getBoundingClientRect();
-      const top = rect.top;
-
-      if (currentTop === null || Math.abs(top - currentTop) < 10) {
-        // Same line
-        currentLine.push({ element, rect });
-        if (currentTop === null) currentTop = top;
-      } else {
-        // New line
-        if (currentLine.length > 0) {
-          lines.push(currentLine);
-        }
-        currentLine = [{ element, rect }];
-        currentTop = top;
-      }
-    }
-    if (currentLine.length > 0) {
-      lines.push(currentLine);
-    }
-
-    if (lines.length === 0) {
-      alert("No content to download!");
-      return;
-    }
-
-    // First pass: calculate scale factor from images
-    let totalScale = 0;
-    let scaleCount = 0;
-    for (const line of lines) {
-      for (const { element } of line) {
-        if (element.tagName === "SPAN" && element.classList.contains("word-container")) {
-          const images = Array.from(element.querySelectorAll("img"));
-          for (const img of images) {
-            if (img.complete && img.naturalWidth > 0) {
-              const imgRect = img.getBoundingClientRect();
-              const displayedWidth = imgRect.width;
-              const naturalWidth = img.naturalWidth;
-              if (displayedWidth > 0) {
-                totalScale += naturalWidth / displayedWidth;
-                scaleCount++;
-              }
-            }
-          }
-        } else if (element.tagName === "IMG") {
-          if (element.complete && element.naturalWidth > 0) {
-            const imgRect = element.getBoundingClientRect();
-            const displayedWidth = imgRect.width;
-            const naturalWidth = element.naturalWidth;
-            if (displayedWidth > 0) {
-              totalScale += naturalWidth / displayedWidth;
-              scaleCount++;
-            }
-          }
-        }
-      }
-    }
-    // Use average scale factor, or default to 2x for quality if no images
-    const qualityScale = scaleCount > 0 ? totalScale / scaleCount : 2;
-
-    // Calculate dimensions for each line and overall canvas
-    const lineData = [];
-    let maxLineWidth = 0;
-    let totalHeight = 0;
-
-    for (const line of lines) {
-      let lineWidth = 0;
-      let lineMaxHeight = 0;
-      const lineElements = [];
-
-      for (const { element, rect } of line) {
-        if (element.dataset.isSpace === "true" || element.classList.contains("word-space")) {
-          // Space element - scale up for quality
-          const spaceWidth = (rect.width || 150) * qualityScale;
-          lineWidth += spaceWidth;
-          lineElements.push({ isSpace: true, width: spaceWidth, height: 0 });
-        } else if (element.tagName === "SPAN" && element.classList.contains("word-container")) {
-          // Word container - get all images inside
-          const images = Array.from(element.querySelectorAll("img"));
-          for (const img of images) {
-            if (img.complete && img.naturalWidth > 0) {
-              // Use natural dimensions for better quality
-              const naturalWidth = img.naturalWidth;
-              const naturalHeight = img.naturalHeight;
-              lineWidth += naturalWidth;
-              lineMaxHeight = Math.max(lineMaxHeight, naturalHeight);
-              lineElements.push({ 
-                isSpace: false, 
-                img: img, 
-                width: naturalWidth, 
-                height: naturalHeight
-              });
-            }
-          }
-        } else if (element.tagName === "IMG") {
-          // Direct image
-          if (element.complete && element.naturalWidth > 0) {
-            // Use natural dimensions for better quality
-            const naturalWidth = element.naturalWidth;
-            const naturalHeight = element.naturalHeight;
-            lineWidth += naturalWidth;
-            lineMaxHeight = Math.max(lineMaxHeight, naturalHeight);
-            lineElements.push({ 
-              isSpace: false, 
-              img: element, 
-              width: naturalWidth, 
-              height: naturalHeight
-            });
-          }
-        }
-      }
-
-      if (lineElements.length > 0) {
-        lineData.push({ elements: lineElements, width: lineWidth, height: lineMaxHeight });
-        maxLineWidth = Math.max(maxLineWidth, lineWidth);
-        totalHeight += lineMaxHeight;
-      }
-    }
-
-    if (lineData.length === 0) {
-      alert("No valid content to download!");
-      return;
-    }
-    
-    // Line spacing constant (matches CSS row-gap) - scale up for quality
-    const lineSpacing = 20 * qualityScale;
-    const watermarkPadding = 25 * qualityScale; // Padding above and below watermark text
-    const imagePadding = 30 * qualityScale; // Padding around the entire image
-
-    // Calculate content dimensions (already using natural dimensions)
-    const contentHeight = totalHeight + (lineData.length - 1) * lineSpacing;
-    const contentWidth = maxLineWidth;
-
-    // Calculate watermark dimensions (always included)
-    let watermarkHeight = 0;
-    let fontSize = 14 * qualityScale; // Scale font size for quality
-    const watermarkText = "these bryans were brought to you by livefontever.com";
-    const tempCanvas = document.createElement("canvas");
-    const tempCtx = tempCanvas.getContext("2d");
-    tempCtx.font = `${fontSize}px "Work Sans", sans-serif`;
-    const tempTextMetrics = tempCtx.measureText(watermarkText);
-    const targetWidth = contentWidth; // Full content width
-    if (tempTextMetrics.width > 0) {
-      fontSize = Math.floor((fontSize * targetWidth) / tempTextMetrics.width);
-      tempCtx.font = `${fontSize}px "Work Sans", sans-serif`;
-    }
-    const watermarkTextHeight = fontSize; // Approximate text height
-    watermarkHeight = watermarkPadding + watermarkTextHeight; // Spacing above + text height
-    
-    // Calculate total content height including watermark (if any)
-    const totalContentHeight = contentHeight + watermarkHeight;
-
-    // Create canvas with padding around the entire image (at high resolution)
-    const canvas = document.createElement("canvas");
-    canvas.width = contentWidth + imagePadding * 2;
-    canvas.height = totalContentHeight + imagePadding * 2;
-    const ctx = canvas.getContext("2d");
-    
-    // Enable high-quality image smoothing
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-
-    // Fill background with radial gradient (only if includeBackground is true)
-    if (includeBackground) {
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
-      // Calculate radius to reach corners (diagonal distance)
-      const maxRadius = Math.sqrt(centerX * centerX + centerY * centerY);
-      const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, maxRadius);
-      gradient.addColorStop(0, "#334F97"); // Center color
-      gradient.addColorStop(1, "#171B3C"); // Edge color
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    // Draw each line (offset by padding)
-    let y = imagePadding;
-    for (let i = 0; i < lineData.length; i++) {
-      const line = lineData[i];
-      let x = imagePadding; // Start x at padding position for uniform spacing
-      for (const item of line.elements) {
-        try {
-          if (item.isSpace) {
-            // Space - just advance x position without drawing anything
-            x += item.width;
-          } else {
-            ctx.drawImage(item.img, x, y, item.width, item.height);
-            x += item.width;
-          }
-        } catch (error) {
-          console.error("Error drawing image:", error);
-        }
-      }
-      y += line.height;
-      // Add spacing after each line except the last one
-      if (i < lineData.length - 1) {
-        y += lineSpacing;
-      }
-    }
-
-    // Draw watermark at the bottom (always included)
-    ctx.font = `${fontSize}px "Work Sans", sans-serif`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    
-    // Draw text left-aligned (offset by padding for uniform spacing)
-    ctx.fillStyle = "#FFFFFF"; // White text
-    const watermarkY = imagePadding + contentHeight + watermarkPadding;
-    ctx.fillText(watermarkText, imagePadding, watermarkY);
-
-    // Helper function to show toast notifications (mobile only)
-    function showNotification(message, isError = false) {
-      // Only show notifications on mobile devices
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      if (!isMobile) {
-        return;
-      }
-      
-      const notification = document.createElement('div');
-      notification.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: #73B2FF;
-        color: white;
-        padding: 15px 25px;
-        border-radius: 8px;
-        z-index: 10001;
-        font-size: 16px;
-        font-weight: 500;
-        text-align: center;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-        animation: slideDown 0.3s ease-out;
-      `;
-      notification.textContent = message;
-      
-      // Add animation
-      const style = document.createElement('style');
-      style.textContent = `
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translate(-50%, -60%);
-          }
-          to {
-            opacity: 1;
-            transform: translate(-50%, -50%);
-          }
-        }
-      `;
-      if (!document.getElementById('notification-style')) {
-        style.id = 'notification-style';
-        document.head.appendChild(style);
-      }
-      
-      document.body.appendChild(notification);
-      
-      // Remove after 3 seconds
-      setTimeout(() => {
-        notification.style.animation = 'slideDown 0.3s ease-out reverse';
-        setTimeout(() => {
-          if (notification.parentNode) {
-            notification.parentNode.removeChild(notification);
-          }
-        }, 300);
-      }, 3000);
-    }
-
-    // Check if mobile device (iOS or Android)
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    
-    // Determine image format and quality based on background
-    // Use JPEG with compression for images with background (smaller file size)
-    // Use PNG for transparent images (required for transparency)
-    const imageFormat = includeBackground ? "image/jpeg" : "image/png";
-    const imageQuality = includeBackground ? 0.85 : undefined; // JPEG quality (0.85 = 85% quality, good balance)
-    const fileExtension = includeBackground ? ".jpg" : ".png";
-    const suffix = includeBackground ? "" : "_transparent";
-    const filename = `${text.replace(/\s+/g, "_")}${suffix}${fileExtension}`;
-    
-    // Helper function to convert data URL to blob synchronously
-    function dataURLToBlob(dataURL) {
-      const arr = dataURL.split(',');
-      const mime = arr[0].match(/:(.*?);/)[1];
-      const bstr = atob(arr[1]);
-      let n = bstr.length;
-      const u8arr = new Uint8Array(n);
-      while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-      }
-      return new Blob([u8arr], { type: mime });
-    }
-    
-    if (isMobile && navigator.share) {
-      // For mobile, use toDataURL() synchronously to preserve user gesture context
-      // This allows us to call navigator.share() immediately without waiting for async toBlob
+    if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
       try {
-        const dataURL = canvas.toDataURL(imageFormat, imageQuality);
-        const blob = dataURLToBlob(dataURL);
-        const file = new File([blob], filename, { type: imageFormat });
-        
-        // Check if file sharing is actually supported (some extensions block this)
-        let canShareFile = false;
+        // Encode synchronously so the native share sheet keeps the original tap gesture.
+        const dataURL = canvas.toDataURL('image/png');
+        const bytes = Uint8Array.from(atob(dataURL.split(',')[1]), char => char.charCodeAt(0));
+        const blob = new Blob([bytes], { type: 'image/png' });
+        const file = new File([blob], filename, { type: 'image/png' });
         try {
-          canShareFile = navigator.canShare && navigator.canShare({ files: [file] });
-        } catch (e) {
-          // canShare might throw if extensions are interfering
-          console.log('canShare check failed, trying share anyway:', e);
-          canShareFile = true; // Try anyway
-        }
-        
-        // Call share() immediately while user gesture is still valid
-        if (canShareFile || !navigator.canShare) {
-          navigator.share({
-            files: [file],
-            title: filename
-          }).catch((error) => {
-            // If share fails, fallback to download approach
-            if (error.name === 'AbortError') {
-              // User cancelled - do nothing
-              return;
-            }
-            
-            console.log('Web Share API failed, falling back to download:', error.name, error.message);
-            // Fallback: Try blob URL download first (better support than data URL)
-            // Create blob URL synchronously to preserve user gesture context
-            const blobUrl = URL.createObjectURL(blob);
-            try {
-              const a = document.createElement("a");
-              a.href = blobUrl;
-              a.download = filename;
-              a.style.display = "none";
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              // Clean up blob URL after a short delay
-              setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-            } catch (downloadError) {
-              // If download fails, fallback to opening data URL in new tab
-              console.log('Download link failed, opening in new tab:', downloadError);
-              URL.revokeObjectURL(blobUrl);
-              const newWindow = window.open(dataURL, '_blank');
-              if (!newWindow) {
-                // Last resort: try data URL download
-                const a = document.createElement("a");
-                a.href = dataURL;
-                a.download = filename;
-                a.style.display = "none";
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-              }
-            }
-          });
-        } else {
-          // File sharing not supported - try blob URL download immediately
-          console.log('File sharing not supported, using blob URL download');
-          const blobUrl = URL.createObjectURL(blob);
-          try {
-            const a = document.createElement("a");
-            a.href = blobUrl;
-            a.download = filename;
-            a.style.display = "none";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-          } catch (downloadError) {
-            // If download fails, fallback to opening data URL
-            console.log('Download link failed, opening in new tab:', downloadError);
-            URL.revokeObjectURL(blobUrl);
-            const newWindow = window.open(dataURL, '_blank');
-            if (!newWindow) {
-              const a = document.createElement("a");
-              a.href = dataURL;
-              a.download = filename;
-              a.style.display = "none";
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-            }
+          if (navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file] }).catch(error => {
+              if (error.name !== 'AbortError') saveImage(blob);
+            });
+          } else {
+            saveImage(blob);
           }
+        } catch (error) {
+          // A blocked share API can still fall back to the already prepared image.
+          if (error.name !== 'AbortError') saveImage(blob);
         }
-        return; // Exit early if mobile share was attempted
+        return;
       } catch (error) {
-        console.log('Error with toDataURL, falling back to toBlob:', error);
-        // Fall through to toBlob approach
+        // If synchronous encoding fails, try the browser's Blob encoder below.
+        console.warn('Preparing image for download instead:', error);
       }
     }
-    
-    // Desktop or mobile fallback: use toBlob for better quality with compression
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        showNotification("Error: Failed to create image. Please try again.", true);
-        console.error("Failed to create blob from canvas");
-        return;
-      }
-      
-      if (isMobile) {
-        // Mobile fallback (if toDataURL approach failed above)
-        // Try blob URL download first (better support than data URL)
-        try {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = filename;
-          a.style.display = "none";
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          // Clean up blob URL after a short delay
-          setTimeout(() => URL.revokeObjectURL(url), 100);
-        } catch (downloadError) {
-          // If blob URL download fails, fallback to data URL
-          console.log('Blob URL download failed, trying data URL:', downloadError);
-          const dataURL = canvas.toDataURL(imageFormat, imageQuality);
-          const a = document.createElement("a");
-          a.href = dataURL;
-          a.download = filename;
-          a.style.display = "none";
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        }
-      } else {
-        // Desktop: traditional download
-        try {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          // Desktop downloads don't show notifications (mobile only)
-        } catch (error) {
-          showNotification("Error downloading image. Please try again.", true);
-          console.error("Download error:", error);
-        }
-      }
-    }, imageFormat, imageQuality);
+
+    try { canvas.toBlob(saveImage, 'image/png'); }
+    catch (error) { reportError(error); }
   };
 
   downloadBtn.addEventListener("click", () => {
-    downloadCount++;
-    trackEvent('download_clicked', {
-      download_type: 'with_background',
-      download_number: downloadCount,
-      text_length: input.value.trim().length,
-      has_typed: hasTyped
-    });
-    downloadImage(true);
-  });
-  
-  downloadTransparentBtn.addEventListener("click", () => {
     downloadCount++;
     trackEvent('download_clicked', {
       download_type: 'transparent',
@@ -811,7 +480,66 @@ document.addEventListener("DOMContentLoaded", () => {
       text_length: input.value.trim().length,
       has_typed: hasTyped
     });
-    downloadImage(false);
+    downloadImage();
+  });
+
+  const createTweetBtn = document.getElementById('createTweet');
+  createTweetBtn.addEventListener('click', () => {
+    if (!input.value.trim()) {
+      alert('Please type something first!');
+      return;
+    }
+    const letterImages = new Map(
+      Array.from(output.querySelectorAll('img[data-char]'), img => [img.dataset.char, img])
+    );
+    try {
+      const canvas = createMessageCanvas(input.value, letterImages, { blueBackground: true });
+      createTweetBtn.disabled = true;
+      canvas.toBlob(blob => {
+        createTweetBtn.disabled = false;
+        if (!blob) {
+          alert('Unable to create the image. Please try again.');
+          return;
+        }
+        try { downloadBlob(blob, 'livefontever-tweet.png'); }
+        catch (error) { alert(error.message); }
+      }, 'image/png');
+    } catch (error) {
+      createTweetBtn.disabled = false;
+      alert(error.message);
+    }
+  });
+
+  // Preload preset letters so sharing stays within the original click gesture.
+  const presets = Array.from(document.querySelectorAll('.preset-message'));
+  const presetImages = new Map();
+  const presetChars = new Set(presets.flatMap(preset =>
+    Array.from(preset.dataset.message.toUpperCase()).filter(isValidChar)
+  ));
+  Promise.all(Array.from(presetChars, char => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = resolve;
+    img.onerror = () => reject(new Error(`Unable to load ${char}`));
+    presetImages.set(char, img);
+    img.src = `letters/${getImageFilename(char)}?v=${imageVersion}`;
+  }))).then(() => {
+    presets.forEach(preset => {
+      const message = preset.dataset.message;
+      const canvas = createMessageCanvas(message, presetImages, { includeWatermark: false });
+      canvas.style.width = `${canvas.width / 3 * 0.38}px`;
+      canvas.setAttribute('aria-hidden', 'true');
+      preset.appendChild(canvas);
+      preset.disabled = false;
+      preset.addEventListener('click', () => {
+        downloadImage(message, presetImages);
+      });
+    });
+    const status = document.querySelector('.preset-status');
+    if (status) status.hidden = true;
+  }).catch(error => {
+    console.error('Preset messages failed to load:', error);
+    const status = document.querySelector('.preset-status');
+    if (status) status.textContent = 'Messages could not load. Refresh to try again.';
   });
 
   // Share button functionality

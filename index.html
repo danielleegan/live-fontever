@@ -47,24 +47,24 @@
 <body>
   <!-- Parallax background images -->
   <div class="parallax-image parallax-left">
-    <img src="other_media/laser_bryan_2.png" alt="Laser Bryan" crossorigin="anonymous" />
+    <img src="other_media/laser_bryan_2.webp" alt="Laser Bryan" crossorigin="anonymous" width="2048" height="2048" />
   </div>
   <div class="parallax-image parallax-right">
-    <img src="other_media/laser_bryan_1.png" alt="Laser Bryan" crossorigin="anonymous" />
+    <img src="other_media/laser_bryan_1.webp" alt="Laser Bryan" crossorigin="anonymous" width="435" height="435" />
   </div>
 
   <!-- Main content -->
   <main class="main-content">
     <!-- Title -->
     <div class="title-section">
-      <img src="other_media/live_fontever.png" alt="Live Fontever" class="title-image" crossorigin="anonymous" />
+      <img src="other_media/live_fontever.webp" alt="Live Fontever" class="title-image" crossorigin="anonymous" width="3987" height="600" />
       <p class="disclaimer">this is neither sponsored nor endorsed by bryan johnson, hopefully he'd lowkey find it funny tho</p>
     </div>
 
     <!-- Input section -->
     <div class="input-section">
       <div class="input-wrapper">
-        <p class="input-label">write in live fontever below:</p>
+        <label for="textInput" class="input-label">write in live fontever below:</label>
         <input 
           id="textInput" 
           type="text" 
@@ -76,14 +76,62 @@
 
     <!-- Output section -->
     <div class="output-section">
-      <div id="output"></div>
+      <div id="output" role="img" aria-label="Your message preview"></div>
     </div>
 
     <!-- Action buttons -->
     <div class="actions-section">
-      <button id="download" class="action-button">i want to keep him (forever)</button>
-      <button id="downloadTransparent" class="action-button secondary">i want to keep him (transparent)</button>
+      <button id="download" class="action-button">send as text message</button>
+      <button id="createTweet" class="action-button">create tweet</button>
     </div>
+
+    <div class="section-divider"></div>
+
+      <div class="texting-example">
+        <p class="texting-caption share-label">texting in livefontever is fun and easy!</p>
+        <div class="texting-layout">
+          <img class="texting-screenshot" src="other_media/texting-example.jpg" alt="Example text conversation using livefontever letter images." width="1206" height="2454" loading="lazy" decoding="async" />
+          <div class="preset-messages" aria-label="Ready-to-send messages">
+            <p class="preset-heading">click one of these common messages to send them:</p>
+            <button type="button" class="preset-message" data-message="heyyy you up?" disabled aria-label="Send heyyy you up? as a text message"></button>
+            <button type="button" class="preset-message" data-message="prom?" disabled aria-label="Send prom? as a text message"></button>
+            <button type="button" class="preset-message" data-message="i think we should see other people" disabled aria-label="Send i think we should see other people as a text message"></button>
+            <p class="preset-status" role="status">loading messages…</p>
+          </div>
+        </div>
+      </div>
+
+    <div class="section-divider"></div>
+
+    <section class="alphabet-section" aria-labelledby="alphabet-heading">
+      <h2 id="alphabet-heading" class="share-label">learn the alphabet with bryan!</h2>
+      <div class="imac-setup">
+        <div class="imac" id="alphabet-imac">
+          <img class="imac-frame" src="other_media/imac-blueberry-frame.webp" alt="" width="1254" height="1254" loading="lazy" decoding="async" />
+          <div class="imac-display" id="alphabet-display">
+            <button class="alphabet-preview" id="alphabet-play" type="button" aria-label="Play the Bryan Johnson alphabet video">
+              <img src="other_media/alphabet-video-poster.jpg" alt="" width="960" height="540" loading="lazy" />
+              <span class="alphabet-play-icon" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+        <div id="alphabet-controls" class="alphabet-controls" data-ready="false" role="group" aria-label="Alphabet video controls">
+          <svg class="alphabet-mouse-cord" viewBox="0 0 100 160" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <path class="mouse-cord-shadow" d="M 0 142 C 4 120 34 148 72 132 C 103 119 103 70 97 45 C 91 17 73 9 60 16" />
+            <path class="mouse-cord-highlight" d="M 0 142 C 4 120 34 148 72 132 C 103 119 103 70 97 45 C 91 17 73 9 60 16" />
+          </svg>
+          <button id="alphabet-toggle" type="button" data-state="play" aria-label="Play alphabet video">
+            <img class="alphabet-mouse" src="other_media/imac-mouse.webp" alt="" width="1254" height="1254" loading="lazy" />
+            <span class="alphabet-toggle-icon" aria-hidden="true"></span>
+            <span class="alphabet-toggle-label">play</span>
+          </button>
+          <button id="alphabet-mute" type="button">mute</button>
+          <button id="alphabet-restart" type="button">restart</button>
+        </div>
+      </div>
+      <p id="alphabet-video-status" class="alphabet-video-status" role="status" hidden></p>
+      <noscript><a href="https://www.youtube.com/watch?v=RdZYQ8fPMB0">Watch the alphabet video on YouTube</a></noscript>
+    </section>
 
     <!-- Share section -->
     <div class="share-section">
@@ -91,12 +139,36 @@
       <button id="shareButton" class="action-button scroll-reveal">share bryan with a friend</button>
     </div>
 
+    <div class="section-divider scroll-reveal"></div>
+
     <!-- FAQ section -->
     <section class="faq-section">
-      <img src="other_media/FAQ.png" alt="FAQ" class="section-title-image scroll-reveal" crossorigin="anonymous" />
+      <img src="other_media/FAQ.webp" alt="FAQ" class="section-title-image scroll-reveal" crossorigin="anonymous" width="1187" height="600" />
       <div class="faq-content">
         <p class="faq-question scroll-reveal">i can't tell if you're pro or anti-bryan johnson. are you one of his sniveling obedient twitter worshipers or one of his single-braincell deniers who will be left behind in the singularity rapture?</p>
         <p class="faq-answer scroll-reveal">i am pro-bryan johnson, but not because I even particularly agree with his ideology. what do I very much respect is running mad-scientist-like experiments on yourself, not experimenting on prison populations or indigenous communities or under-informed clinical patients, like a fucking coward. we as a society should just be fucking around and finding out on our own bodies way more and I appreciate this mindset.</p>
+        <p class="faq-question scroll-reveal">why?</p>
+        <p class="faq-answer faq-origin-answer scroll-reveal">i saw his viral naked photoshoot and thought he looked like letters, so i decided to make the rest of the letters</p>
+        <div class="faq-photo-groups">
+          <figure class="faq-photo-group scroll-reveal" role="img" aria-label="Four original poses from Bryan Johnson’s photoshoot">
+            <span class="faq-photo" style="left:78.09068%;top:3.46072%;width:21.90932%;height:96.53894%;transform:rotate(180deg);"><img src="other_media/faq-slide-13-photo-1.webp" alt="" loading="lazy" decoding="async" style="left:0.00000%;top:0.00000%;width:100.00000%;height:100.00000%;" width="722" height="1240" /></span>
+            <span class="faq-photo" style="left:0.00000%;top:3.54239%;width:17.10895%;height:96.37585%;"><img src="other_media/faq-slide-13-photo-2.webp" alt="" loading="lazy" decoding="async" style="left:0.00000%;top:0.00000%;width:100.00000%;height:100.00000%;" width="552" height="1212" /></span>
+            <span class="faq-photo" style="left:19.26348%;top:3.54239%;width:29.17307%;height:96.37567%;"><img src="other_media/faq-slide-13-photo-3.webp" alt="" loading="lazy" decoding="async" style="left:0.00000%;top:0.00000%;width:100.00000%;height:100.00000%;" width="1036" height="1334" /></span>
+            <span class="faq-photo" style="left:50.88147%;top:3.54239%;width:24.76467%;height:96.37557%;"><img src="other_media/faq-slide-13-photo-4.webp" alt="" loading="lazy" decoding="async" style="left:0.00000%;top:0.00000%;width:100.00000%;height:100.00000%;" width="1246" height="1890" /></span>
+          </figure>
+          <figure class="faq-photo-group scroll-reveal" role="img" aria-label="The same four poses with red markings showing the letter shapes">
+            <span class="faq-photo" style="left:78.09068%;top:3.46072%;width:21.90932%;height:96.53894%;transform:rotate(180deg);"><img src="other_media/faq-slide-13-photo-1.webp" alt="" loading="lazy" decoding="async" style="left:0.00000%;top:0.00000%;width:100.00000%;height:100.00000%;" width="722" height="1240" /></span>
+            <span class="faq-photo" style="left:0.00000%;top:3.54239%;width:17.10895%;height:96.37585%;"><img src="other_media/faq-slide-13-photo-2.webp" alt="" loading="lazy" decoding="async" style="left:0.00000%;top:0.00000%;width:100.00000%;height:100.00000%;" width="552" height="1212" /></span>
+            <span class="faq-photo" style="left:19.26348%;top:3.54239%;width:29.17307%;height:96.37567%;"><img src="other_media/faq-slide-13-photo-3.webp" alt="" loading="lazy" decoding="async" style="left:0.00000%;top:0.00000%;width:100.00000%;height:100.00000%;" width="1036" height="1334" /></span>
+            <span class="faq-photo" style="left:50.88147%;top:3.54239%;width:24.76467%;height:96.37557%;"><img src="other_media/faq-slide-13-photo-4.webp" alt="" loading="lazy" decoding="async" style="left:0.00000%;top:0.00000%;width:100.00000%;height:100.00000%;" width="1246" height="1890" /></span>
+            <span class="faq-photo" style="left:19.26348%;top:3.46038%;width:29.55424%;height:96.53962%;"><img src="other_media/faq-slide-14-photo-5.webp" alt="" loading="lazy" decoding="async" style="left:-51.80006%;top:-7.51017%;width:200.90003%;height:118.27041%;" width="2048" height="1535" /></span>
+            <span class="faq-photo" style="left:78.09082%;top:3.54239%;width:21.90900%;height:95.94715%;"><img src="other_media/faq-slide-14-photo-6.webp" alt="" loading="lazy" decoding="async" style="left:-75.40865%;top:-10.84015%;width:267.52990%;height:117.47016%;" width="2048" height="1535" /></span>
+            <span class="faq-photo" style="left:50.98584%;top:0.00000%;width:24.93695%;height:100.00003%;transform:rotate(180deg);"><img src="other_media/faq-slide-14-photo-7.webp" alt="" loading="lazy" decoding="async" style="left:-58.59054%;top:-3.94985%;width:217.50952%;height:104.30030%;" width="2048" height="1535" /></span>
+            <span class="faq-photo" style="left:0.00002%;top:3.34162%;width:17.18013%;height:96.14798%;transform:rotate(180deg);"><img src="other_media/faq-slide-14-photo-8.webp" alt="" loading="lazy" decoding="async" style="left:-136.01952%;top:-20.40057%;width:381.19925%;height:130.99121%;" width="2048" height="1535" /></span>
+          </figure>
+        </div>
+        <p class="faq-question scroll-reveal">i am bryan’s legal team and demand you take this down immediately</p>
+        <p class="faq-answer scroll-reveal">c’mon bro it’s lowkey funny though</p>
       </div>
     </section>
 
@@ -105,11 +177,9 @@
 
     <!-- Contact section -->
     <section class="contact-section">
-      <img src="other_media/contact.png" alt="CONTACT" class="section-title-image scroll-reveal" crossorigin="anonymous" />
+      <img src="other_media/contact.webp" alt="CONTACT" class="section-title-image scroll-reveal" crossorigin="anonymous" width="2466" height="600" />
       <div class="contact-content">
         <p class="contact-text scroll-reveal">please do not contact me, as i am very busy.</p>
-        <p class="contact-text-emphasis scroll-reveal">please, please, please, i am very scared and need to speak with a manager.</p>
-        <p class="contact-text scroll-reveal">fine, you can email me at fontmaster @ the name of this website.</p>
       </div>
     </section>
   </main>
