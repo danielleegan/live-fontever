@@ -485,13 +485,6 @@ body {
 .alphabet-video-status a { color: inherit; text-decoration: underline; }
 
 .alphabet-controls { display: none; }
-.alphabet-controls:not([hidden])[data-ready="true"] {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 12px;
-}
 
 .alphabet-controls button {
   min-height: 44px;
@@ -518,8 +511,7 @@ body {
 .alphabet-mouse-cord { display: none; }
 
 @media (max-width: 768px) {
-  .alphabet-controls:not([hidden]),
-  .alphabet-controls:not([hidden])[data-ready="true"] {
+  .alphabet-controls:not([hidden]) {
     --mouse-shift: clamp(30px, 13vw, 60px);
     position: relative;
     display: flex;
