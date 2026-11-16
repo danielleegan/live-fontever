@@ -135,8 +135,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const restart = document.getElementById('alphabet-restart');
     alphabetPlay.disabled = true;
     toggle.disabled = true;
-    status.hidden = false;
-    status.textContent = 'loading video…';
+    status.hidden = true;
+    status.textContent = '';
 
     const showVideoError = () => {
       controls.hidden = true;
@@ -235,6 +235,23 @@ document.addEventListener("DOMContentLoaded", () => {
     console.error("Required elements not found!");
     return;
   }
+
+  // Select on entry so a phone's first keystroke replaces the existing message.
+  // Later taps in the focused field still let the visitor position the cursor.
+  const selectsOnEntry = () => window.matchMedia('(max-width: 768px)').matches;
+  let selectAfterTap = false;
+  input.addEventListener('pointerdown', () => {
+    selectAfterTap = selectsOnEntry() && document.activeElement !== input;
+  });
+  input.addEventListener('focus', () => {
+    if (selectsOnEntry()) input.select();
+  });
+  input.addEventListener('click', () => {
+    // A touch click can reposition the caret after the focus event.
+    if (selectAfterTap) input.select();
+    selectAfterTap = false;
+  });
+  input.addEventListener('blur', () => { selectAfterTap = false; });
 
   // PostHog tracking variables
   let hasTyped = false;
