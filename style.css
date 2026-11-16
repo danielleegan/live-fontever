@@ -613,9 +613,9 @@ body {
 }
 
 .share-section .action-button {
-  width: 250px;
+  width: max-content;
   max-width: 100%;
-  min-width: 0;
+  min-width: min(250px, 100%);
 }
 
 /* Scroll reveal animation for individual elements */
