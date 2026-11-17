@@ -115,116 +115,73 @@ document.addEventListener("DOMContentLoaded", () => {
   const controls = document.getElementById('alphabet-controls');
   const toggle = document.getElementById('alphabet-toggle');
   const toggleLabel = toggle.querySelector('.alphabet-toggle-label');
+  const videoStatus = document.getElementById('alphabet-video-status');
+  const mobileVideo = window.matchMedia('(max-width: 768px)');
+  const videoSource = 'other_media/bryan-alphabet.mp4';
   let alphabetPlayer = null;
-  const setPlaybackState = state => {
-    const playing = [1, 3].includes(state);
+
+  const syncPlaybackState = () => {
+    const playing = alphabetPlayer && !alphabetPlayer.paused && !alphabetPlayer.ended;
+    const ended = alphabetPlayer?.ended;
     toggle.dataset.state = playing ? 'pause' : 'play';
-    toggleLabel.textContent = playing ? 'pause' : state === 0 ? 'replay' : 'play';
-    toggle.setAttribute('aria-label', playing ? 'Pause alphabet video' : state === 0 ? 'Replay alphabet video' : 'Play alphabet video');
+    toggleLabel.textContent = playing ? 'pause' : ended ? 'replay' : 'play';
+    toggle.setAttribute('aria-label', playing ? 'Pause alphabet video' : ended ? 'Replay alphabet video' : 'Play alphabet video');
   };
-  toggle.addEventListener('click', () => {
-    if (!alphabetPlayer) alphabetPlay.click();
-    else if ([1, 3].includes(alphabetPlayer.getPlayerState())) alphabetPlayer.pauseVideo();
-    else alphabetPlayer.playVideo();
-  });
-  alphabetPlay?.addEventListener('click', () => {
-    const display = document.getElementById('alphabet-display');
-    const status = document.getElementById('alphabet-video-status');
-    const imac = document.getElementById('alphabet-imac');
-    const mute = document.getElementById('alphabet-mute');
-    const restart = document.getElementById('alphabet-restart');
-    alphabetPlay.disabled = true;
-    toggle.disabled = true;
-    status.hidden = true;
-    status.textContent = '';
-
-    const showVideoError = () => {
-      controls.hidden = true;
-      status.hidden = false;
-      status.replaceChildren(document.createTextNode('Unable to load the video. '));
-      const link = document.createElement('a');
-      link.href = 'https://www.youtube.com/watch?v=RdZYQ8fPMB0';
-      link.textContent = 'Watch on YouTube';
-      status.append(link);
-    };
-
-    let loadTimeout = setTimeout(showVideoError, 20000);
-    const createPlayer = () => {
-      clearTimeout(loadTimeout);
-      loadTimeout = setTimeout(showVideoError, 20000);
-      const target = document.createElement('div');
-      target.id = 'alphabet-player';
-      display.replaceChildren(target);
-      imac.classList.add('is-playing');
-      new YT.Player(target, {
-        videoId: 'RdZYQ8fPMB0',
-        playerVars: {
-          autoplay: 0,
-          loop: 0,
-          rel: 0,
-          // Match the mobile mouse-control layout in style.css.
-          controls: window.matchMedia('(max-width: 768px)').matches ? 0 : 1,
-          playsinline: 1,
-          origin: window.location.origin,
-          // Do not force captions on. YouTube may honor a viewer's saved preference.
-        },
-        events: {
-          onReady: (event) => {
-            clearTimeout(loadTimeout);
-            status.hidden = true;
-            const frame = event.target.getIframe();
-            frame.classList.add('alphabet-video');
-            frame.title = 'Learn the alphabet with Bryan';
-            const player = event.target;
-            alphabetPlayer = player;
-            toggle.disabled = false;
-            const syncPlaybackControls = () => {
-              setPlaybackState(player.getPlayerState());
-              mute.textContent = player.isMuted() ? 'unmute' : 'mute';
-            };
-            mute.addEventListener('click', () => {
-              const wasMuted = player.isMuted();
-              if (wasMuted) player.unMute();
-              else player.mute();
-              mute.textContent = wasMuted ? 'mute' : 'unmute';
-            });
-            restart.addEventListener('click', () => {
-              player.seekTo(0, true);
-              player.playVideo();
-            });
-            controls.hidden = false;
-            controls.dataset.ready = 'true';
-            syncPlaybackControls();
-            if (window.matchMedia('(max-width: 768px)').matches) {
-              toggle.focus({ preventScroll: true });
-            }
-            // Playback follows the visitor's explicit Play click, never page load.
-            event.target.playVideo();
-          },
-          onError: () => { clearTimeout(loadTimeout); showVideoError(); },
-          onAutoplayBlocked: () => {
-            status.hidden = false;
-            status.textContent = 'Tap play to start the video.';
-            setPlaybackState(-1);
-          },
-          onStateChange: (event) => {
-            if (event.data === 1) status.hidden = true;
-            setPlaybackState(event.data);
-          }
-        }
-      });
-    };
-
-    if (window.YT?.Player) {
-      createPlayer();
-    } else {
-      window.onYouTubeIframeAPIReady = createPlayer;
-      const api = document.createElement('script');
-      api.src = 'https://www.youtube.com/iframe_api';
-      api.onerror = () => { clearTimeout(loadTimeout); showVideoError(); };
-      document.head.append(api);
+  const showVideoError = () => {
+    videoStatus.hidden = false;
+    videoStatus.replaceChildren(document.createTextNode('Unable to play the video. '));
+    const link = document.createElement('a');
+    link.href = videoSource;
+    link.textContent = 'Open video';
+    videoStatus.append(link);
+    syncPlaybackState();
+  };
+  const playVideo = () => {
+    videoStatus.hidden = true;
+    if (alphabetPlayer.error) alphabetPlayer.load();
+    // Call play directly from the visitor's click to preserve mobile permission.
+    alphabetPlayer.play().catch(error => {
+      if (error.name === 'AbortError') return; // A quick pause can interrupt play.
+      if (error.name === 'NotAllowedError') {
+        videoStatus.hidden = false;
+        videoStatus.textContent = 'Tap play to start the video.';
+        syncPlaybackState();
+      } else showVideoError();
+    });
+  };
+  const startVideo = () => {
+    if (!alphabetPlayer) {
+      const video = document.createElement('video');
+      video.id = 'alphabet-player';
+      video.className = 'alphabet-video';
+      video.setAttribute('aria-label', 'Learn the alphabet with Bryan');
+      video.playsInline = true;
+      video.preload = 'none';
+      video.controls = !mobileVideo.matches;
+      video.poster = 'other_media/alphabet-video-poster.jpg';
+      video.src = videoSource;
+      // No autoplay, loop, or caption tracks; fetch the MP4 only after Play.
+      ['play', 'pause', 'ended'].forEach(event => video.addEventListener(event, syncPlaybackState));
+      video.addEventListener('playing', () => { videoStatus.hidden = true; });
+      video.addEventListener('error', showVideoError);
+      alphabetPlayer = video;
+      document.getElementById('alphabet-display').replaceChildren(video);
+      document.getElementById('alphabet-imac').classList.add('is-playing');
+      controls.dataset.ready = 'true';
+      if (mobileVideo.matches) toggle.focus({ preventScroll: true });
+      else video.focus({ preventScroll: true });
     }
-  }, { once: true });
+    playVideo();
+  };
+  alphabetPlay.addEventListener('click', startVideo);
+  toggle.addEventListener('click', () => {
+    if (!alphabetPlayer) startVideo();
+    else if (alphabetPlayer.paused || alphabetPlayer.ended) playVideo();
+    else alphabetPlayer.pause();
+  });
+  mobileVideo.addEventListener('change', () => {
+    if (alphabetPlayer) alphabetPlayer.controls = !mobileVideo.matches;
+  });
 
   const input = document.getElementById("textInput");
   const output = document.getElementById("output");
@@ -427,13 +384,18 @@ document.addEventListener("DOMContentLoaded", () => {
     'will you be my bloodboy?',
     'i am lowkey scared of death',
     'hello my name is bryan johnson',
-    'kate and i stayed up past bedtime last night'
+    'kate and i stayed up past bedtime last night teehee',
+    'i am so happy to be a font',
+    'they just arrested kate because my biological age hit seventeen',
+    'I really wanna dunk a basketball'
   ];
   input.value = defaultMessages[Math.floor(Math.random() * defaultMessages.length)];
   updateOutput();
 
   // Compose the exported message independently of the webpage's responsive layout.
-  const downloadImage = (message = input.value, preparedLetterImages = null) => {
+  let imageSharePending = false;
+  const downloadImage = (message = input.value, preparedLetterImages = null, { blueBackground = false } = {}) => {
+    if (imageSharePending) return;
     const text = message.toUpperCase();
     if (!text.trim()) {
       alert("Please type something first!");
@@ -445,13 +407,13 @@ document.addEventListener("DOMContentLoaded", () => {
     );
     let canvas;
     try {
-      canvas = createMessageCanvas(text, letterImages);
+      canvas = createMessageCanvas(text, letterImages, { blueBackground });
     } catch (error) {
       alert(error.message);
       return;
     }
 
-    const filename = `${text.replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || 'livefontever'}.png`;
+    const filename = blueBackground ? 'livefontever-tweet.png' : `${text.replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80) || 'livefontever'}.png`;
     const reportError = error => {
       console.error('Unable to share or download image:', error);
       alert('Unable to save the image. Please try again.');
@@ -470,14 +432,18 @@ document.addEventListener("DOMContentLoaded", () => {
         const file = new File([blob], filename, { type: 'image/png' });
         try {
           if (navigator.canShare({ files: [file] })) {
-            navigator.share({ files: [file] }).catch(error => {
-              if (error.name !== 'AbortError') saveImage(blob);
-            });
+            imageSharePending = true;
+            navigator.share({ files: [file] })
+              .catch(error => {
+                if (error.name !== 'AbortError') saveImage(blob);
+              })
+              .finally(() => { imageSharePending = false; });
           } else {
             saveImage(blob);
           }
         } catch (error) {
-          // A blocked share API can still fall back to the already prepared image.
+          imageSharePending = false;
+          // Keep the image download fallback when native sharing fails.
           if (error.name !== 'AbortError') saveImage(blob);
         }
         return;
@@ -504,29 +470,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const createTweetBtn = document.getElementById('createTweet');
   createTweetBtn.addEventListener('click', () => {
-    if (!input.value.trim()) {
-      alert('Please type something first!');
-      return;
-    }
-    const letterImages = new Map(
-      Array.from(output.querySelectorAll('img[data-char]'), img => [img.dataset.char, img])
-    );
-    try {
-      const canvas = createMessageCanvas(input.value, letterImages, { blueBackground: true });
-      createTweetBtn.disabled = true;
-      canvas.toBlob(blob => {
-        createTweetBtn.disabled = false;
-        if (!blob) {
-          alert('Unable to create the image. Please try again.');
-          return;
-        }
-        try { downloadBlob(blob, 'livefontever-tweet.png'); }
-        catch (error) { alert(error.message); }
-      }, 'image/png');
-    } catch (error) {
-      createTweetBtn.disabled = false;
-      alert(error.message);
-    }
+    downloadImage(input.value, null, { blueBackground: true });
   });
 
   // Preload preset letters so sharing stays within the original click gesture.
