@@ -472,8 +472,7 @@ body {
 .alphabet-preview:hover .alphabet-play-icon { transform: translate(-50%, -50%) scale(1.08); }
 .alphabet-preview:focus-visible { outline: 3px solid white; outline-offset: -3px; }
 
-.alphabet-video,
-.imac-display iframe {
+.alphabet-video {
   display: block;
   width: 100%;
   height: auto;
@@ -534,8 +533,6 @@ body {
   .mouse-cord-shadow { stroke: #929b9c; stroke-width: 4px; }
   .mouse-cord-highlight { stroke: #e3e5db; stroke-width: 2px; }
 
-  #alphabet-mute,
-  #alphabet-restart,
   .alphabet-toggle-label,
   .alphabet-preview .alphabet-play-icon { display: none; }
 
