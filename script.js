@@ -117,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const toggleLabel = toggle.querySelector('.alphabet-toggle-label');
   const videoStatus = document.getElementById('alphabet-video-status');
   const mobileVideo = window.matchMedia('(max-width: 768px)');
-  const videoSource = 'other_media/bryan-alphabet.mp4';
+  const videoSource = 'other_media/bryan-alphabet.mp4?v=8';
   let alphabetPlayer = null;
 
   const syncPlaybackState = () => {
@@ -158,7 +158,7 @@ document.addEventListener("DOMContentLoaded", () => {
       video.playsInline = true;
       video.preload = 'none';
       video.controls = !mobileVideo.matches;
-      video.poster = 'other_media/alphabet-video-poster.jpg';
+      video.poster = 'other_media/alphabet-video-poster.jpg?v=8';
       video.src = videoSource;
       // No autoplay, loop, or caption tracks; fetch the MP4 only after Play.
       ['play', 'pause', 'ended'].forEach(event => video.addEventListener(event, syncPlaybackState));
